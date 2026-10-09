@@ -35,6 +35,7 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
  /* Only show "Stream offline" when it lasts: brief gaps (window brought back from the background,
     a dropped keyframe, a still screen) recover by themselves within a second or two. */
  #offline-overlay:not(.hidden) { animation:ext-late 3s steps(1, end) both }
+ body.ext-basic-on #offline-overlay { display:none !important }
  @keyframes ext-late { from { opacity:0; visibility:hidden } to { opacity:1; visibility:visible } }
  /* Floating iPhone: the helper clips the browser window to the phone body, its side buttons and
     the floating controls (winshape.py), so everything else is see-through desktop. */
@@ -406,7 +407,9 @@ BODY_INJECT = """
     } catch (e) { return null; }
   }
 
+  let lastDrawAt = Date.now();
   window.drawFrame = function (orig) {
+    lastDrawAt = Date.now();
     const fixed = fixFrame(orig);
     try { drawFixed(fixed || orig); } finally { if (fixed) fixed.close(); }
   };
@@ -462,6 +465,9 @@ BODY_INJECT = """
   // Phone-first sizing: replace the viewer's fit so the device fills the window height
   // (minus our toolbar) at the stream's true aspect ratio, in any window size or rotation.
   window.fitCanvasToViewport = function () {
+    // No video yet (e.g. iOS refusing to stream during a call): still draw the floating phone, at
+    // the stream's size from the SPS or an iPhone's usual portrait shape, so it isn't just empty.
+    if ((!natW || !natH) && stored('ext-compact') !== '0') { natW = spsW || 1320; natH = spsH || 2868; }
     if (!natW || !natH) return;
     try { if (compactLayout()) return; } catch (e) { report('compactLayout: ' + e.stack); }
     const frameOn = document.body.classList.contains('frame-on');
@@ -587,6 +593,57 @@ BODY_INJECT = """
   }
   setInterval(pollAutomation, 3000);
   setTimeout(pollAutomation, 500);
+  // During a phone/FaceTime call iOS refuses to (re)start the stream (code 9022); say so on the
+  // phone's screen instead of a bare "Stream offline". Upstream keeps retrying, so HD comes back
+  // by itself after the call.
+  const overlay = document.getElementById('offline-overlay');
+  const overlayText = overlay?.querySelector('span');
+  const defaultOverlay = overlayText?.textContent;
+  setInterval(async () => {
+    try {
+      const st = await (await fetch(CTL.replace('/automation', '/status'), {cache: 'no-store'})).json();
+      if (!overlayText) return;
+      if (st.call_blocked) {
+        overlayText.textContent = 'Paused by iOS during your call - HD comes back by itself after it ends.';
+        if (!lastFrame) overlay.classList.remove('hidden');
+      } else if (overlayText.textContent !== defaultOverlay) {
+        overlayText.textContent = defaultOverlay;
+      }
+    } catch (e) {}
+  }, 3000);
+  setTimeout(() => window.fitCanvasToViewport(), 800);   // phone shape even before the first frame
+
+  // Basic-feed fallback: when HD video stops (iOS sends none during calls) and Automation is on,
+  // show WebDriverAgent's MJPEG screen feed in the phone's screen instead of "Stream offline";
+  // touch keeps going through the same HID path. Back to HD as soon as frames return.
+  const MJPEG = 'http://127.0.0.1:__MJPEG_PORT__/';
+  const basic = document.createElement('img');
+  basic.id = 'ext-basic'; basic.alt = '';
+  basic.style.cssText = 'position:fixed;display:none;object-fit:fill;pointer-events:none;z-index:15;background:#000';
+  document.body.appendChild(basic);
+  let basicOn = false;
+  function placeBasic() {
+    const r = canvas.getBoundingClientRect();
+    Object.assign(basic.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
+                                borderRadius: canvas.style.borderRadius || '0'});
+  }
+  setInterval(() => {
+    const quiet = Date.now() - lastDrawAt;
+    if (!basicOn && quiet > 4000 && auto.running && document.visibilityState === 'visible') {
+      basicOn = true;
+      fetch(EXT + '/mjpeg', {method: 'POST', body: '{}'}).catch(() => {});
+      basic.src = MJPEG + '?t=' + Date.now();
+      basic.style.display = 'block';
+      document.body.classList.add('ext-basic-on');
+      toast('HD paused by iOS - showing the basic feed until it returns');
+    } else if (basicOn && (quiet < 1500 || !auto.running)) {
+      basicOn = false;
+      basic.removeAttribute('src');               // closes the MJPEG connection
+      basic.style.display = 'none';
+      document.body.classList.remove('ext-basic-on');
+    }
+    if (basicOn) placeBasic();
+  }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
   const toggleKeyboard = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                                  body: JSON.stringify({name: 'keyboard'})}).catch(() => {});
@@ -723,6 +780,11 @@ BODY_INJECT = """
     postLayout({dpr, maximize: true, shapes});
     return true;
   }
+  // Back from the background/minimized: re-send the shape so the helper re-clips and repaints the
+  // whole window (Edge can otherwise show a stale copy of the old picture next to the new one).
+  const reshape = () => { if (compactOn && document.visibilityState === 'visible') { layoutSent = ''; window.fitCanvasToViewport(); } };
+  document.addEventListener('visibilitychange', () => setTimeout(reshape, 50));
+  window.addEventListener('focus', () => setTimeout(reshape, 50));
   // Re-send the shape now and then so a restarted helper picks it up again.
   setInterval(() => { if (compactOn) { layoutSent = ''; window.fitCanvasToViewport(); } }, 10000);
   // Drag the phone's rim / bezel to move it (it moves inside the maximized, clipped window).

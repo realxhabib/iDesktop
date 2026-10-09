@@ -32,10 +32,12 @@ if os.name == "nt":
     gdi32.DeleteObject.argtypes = [wintypes.HANDLE]
     user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     user32.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HANDLE]
+    user32.RedrawWindow.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.HANDLE, wintypes.UINT]
 
 SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x2, 0x1, 0x4, 0x10
 RGN_OR = 2
 WM_CLOSE, SW_MINIMIZE, SW_RESTORE, SW_MAXIMIZE = 0x0010, 6, 9, 3
+RDW_INVALIDATE, RDW_ERASE, RDW_FRAME, RDW_ALLCHILDREN = 0x1, 0x4, 0x400, 0x80
 
 _lock = threading.Lock()
 _hwnd = None
@@ -184,6 +186,9 @@ def _apply(spec: dict) -> dict:
             gdi32.DeleteObject(part)
         user32.SetWindowRgn(hwnd, rgn, True)  # the system owns rgn from here
         _set_backdrop(hwnd, 1)
+        # Repaint everything, children included: after a minimize/restore Edge can keep showing
+        # stale pixels from the old shape until something forces a full redraw.
+        user32.RedrawWindow(hwnd, None, None, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN)
         return {"ok": True, "content": [content.right - content.left, content.bottom - content.top]}
 
 

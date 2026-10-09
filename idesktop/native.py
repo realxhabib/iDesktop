@@ -15,6 +15,7 @@ import json
 import logging
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 log = logging.getLogger("idesktop.native")
@@ -168,8 +169,12 @@ async def _control_server(port: int) -> None:
             route = path.split("?")[0]
             if route == "/automation" and method == "POST":
                 _Automation.set(bool(json.loads(body or b"{}").get("on")))
-            code = "200 OK" if route == "/automation" else "404 Not Found"
-            out = json.dumps(_Automation.state()).encode()
+            code = "200 OK" if route in ("/automation", "/status") else "404 Not Found"
+            if route == "/status":
+                # iOS refuses to (re)start the stream during calls; upstream keeps retrying.
+                out = json.dumps({"call_blocked": time.time() - CALL_BLOCKED_AT < 45}).encode()
+            else:
+                out = json.dumps(_Automation.state()).encode()
             writer.write(f"HTTP/1.1 {code}\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\n"
                          f"Content-Length: {len(out)}\r\nConnection: close\r\n\r\n".encode() + out)
             await writer.drain()
@@ -184,6 +189,8 @@ async def _control_server(port: int) -> None:
 
 
 CTL_PORT = 0   # set in patch_screen_stream; the viewer page gets it via build_html
+MJPEG_PORT = 0   # local relay to WDA's MJPEG feed (device port 9100)
+CALL_BLOCKED_AT = 0.0   # last time iOS refused the stream because of a call
 
 
 async def _wda_relay(server, port: int, device_port: int = 8100) -> None:
@@ -284,12 +291,18 @@ def _exit_when_tunnel_dies() -> None:
 
     class Watch(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
+            global CALL_BLOCKED_AT
             msg = record.getMessage()
+            if record.exc_info and record.exc_info[1] is not None:
+                msg += " " + str(record.exc_info[1])
             if "userspace tunnel transport closed" in msg or "userspace dial plane is closed" in msg:
                 threading.Timer(1.0, lambda: os._exit(RECONNECT_EXIT)).start()
+            if "code 9022" in msg or "camera or microphone is in use" in msg:
+                CALL_BLOCKED_AT = time.time()   # the viewer explains it (see /status)
             return True
 
-    for name in ("pymobiledevice3.remote.userspace_tunnel", "idesktop.native"):
+    for name in ("pymobiledevice3.remote.userspace_tunnel", "pymobiledevice3.remote.core_device.screen_stream",
+                 "idesktop.native"):
         logging.getLogger(name).addFilter(Watch())
 
 
@@ -297,9 +310,10 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
     import asyncio
     from pymobiledevice3.remote.core_device import screen_stream as ss
 
-    global CTL_PORT
+    global CTL_PORT, MJPEG_PORT
     from .device import free_port
     CTL_PORT = free_port(ext_port + 10)
+    MJPEG_PORT = free_port(ext_port + 20)
     _Automation.load()
     ss.AACELDDecoder = FFmpegAACELDDecoder
     # iOS hides the on-screen keyboard while a hardware keyboard (ours) is attached; the
@@ -312,7 +326,10 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
     async def serve(self, *a, **kw):
         await _mount_ddi(self._rsd)
         self._ext_tasks = [asyncio.create_task(_wda_relay(self, wda_port)),
-                           asyncio.create_task(_control_server(CTL_PORT))]
+                           asyncio.create_task(_control_server(CTL_PORT)),
+                           # WDA's own MJPEG screen feed: the viewer falls back to it while iOS
+                           # sends no HD video (calls), then goes back to HD.
+                           asyncio.create_task(_wda_relay(self, MJPEG_PORT, device_port=9100))]
         if wda_bundle:
             self._ext_tasks.append(asyncio.create_task(_keep_wda_running(self, wda_bundle)))
         return await orig_serve(self, *a, **kw)
@@ -383,7 +400,8 @@ def build_html(upstream: bytes, ext_port: int) -> bytes:
     import importlib
     layer = importlib.reload(viewer_layer)
     html = upstream.replace(b"</head>", layer.HEAD_INJECT.encode() + b"</head>", 1)
-    body = layer.BODY_INJECT.replace("__EXT_PORT__", str(ext_port)).replace("__CTL_PORT__", str(CTL_PORT))
+    body = (layer.BODY_INJECT.replace("__EXT_PORT__", str(ext_port)).replace("__CTL_PORT__", str(CTL_PORT))
+            .replace("__MJPEG_PORT__", str(MJPEG_PORT)))
     html = html.replace(b"</body>", body.encode() + b"</body>", 1)
     return html.replace(b"<title>pymobiledevice3 screen</title>", b"<title>iDesktop</title>")
 
@@ -456,6 +474,14 @@ class Helper(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._reply(503, f"{type(e).__name__}: {e}")
             return self._reply(404, "not found")
+        if self.path == "/mjpeg":
+            # Fallback feed quality (WDA applies the scaling factor squared: 75 -> ~56% size).
+            try:
+                self.wda().configure_stream(fps=24, scale=75, quality=60)
+                return self._reply(200)
+            except Exception:
+                Helper._wda = None
+                return self._reply(503, "needs WebDriverAgent - an optional extra, see the README")
         if self.path == "/volume":
             # "PC only" sound: the PC copy is taken before the phone's volume, but volume 0 mutes
             # it too, so step the phone down to the lowest audible step (1).

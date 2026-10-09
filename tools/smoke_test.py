@@ -53,8 +53,9 @@ def audio_decoder_opens():
 
 
 def helpers_import():
-    from idesktop import app, controller, device, wda  # noqa: F401
+    from idesktop import app, controller, device, wda
     assert device.CONFIG_DIR.name == "iDesktop"
+    assert callable(controller.main) and hasattr(wda, "WDA")
     assert app.RECONNECT_EXIT == __import__("idesktop.native", fromlist=["x"]).RECONNECT_EXIT
 
 

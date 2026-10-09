@@ -664,8 +664,31 @@ BODY_INJECT = """
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); toggleKeyboard(); }
   }, true);
   const pills = [];
+  // Hover help (also in the README's "Floating controls" table).
+  const TIPS = {
+    home: 'Go to the home screen (or right-click the screen, Ctrl+H)',
+    apps: 'Show recent apps (swipe up and hold)',
+    back: 'Swipe in from the left edge - "back" in most apps',
+    cc: 'Swipe down from the top-right corner',
+    bell: 'Swipe down from the top-left: notifications',
+    search: 'Swipe down on the home screen: search',
+    siri: 'Hold the side button for Siri (Ctrl+S)',
+    kbd: "Show/hide the iPhone's own keyboard. iOS hides it while your PC keyboard is connected (Ctrl+K)",
+    zin: 'Two-finger zoom in at the screen centre (or Ctrl + mouse wheel). Needs Automation',
+    zout: 'Two-finger zoom out (or Ctrl + mouse wheel). Needs Automation',
+    shot: 'Save a full-resolution screenshot to Downloads (Ctrl+P)',
+    desk: 'Extra-small text on the phone: denser, iPad-like layouts. Click again to restore your text size',
+    sound: "Play the phone's sound on this PC (on/off)",
+    pc: 'Turn the phone volume down to its lowest step: the PC keeps full volume, the phone is nearly silent. Needs Automation',
+    auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and a backup picture during calls. ' +
+          'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
+    plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
+    layout: 'Switch to the normal window with toolbar, accessibility and clipboard panels',
+    min: 'Minimize iDesktop', close: 'Close iDesktop',
+  };
   groups.forEach((g, gi) => g.forEach(([icon, label, fn, cls], i) => {
     const el = document.createElement('div'); el.className = 'ext-pill' + (cls ? ' ' + cls : '');
+    if (TIPS[icon]) el.title = TIPS[icon];
     el.innerHTML = svg(icon) + '<span></span>';
     el.addEventListener('click', (e) => { e.stopPropagation(); fn(); setTimeout(refreshLabels, 60); });
     extCtl.appendChild(el); pills.push({el, label, icon, gap: gi > 0 && i === 0});

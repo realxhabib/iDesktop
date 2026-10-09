@@ -88,6 +88,43 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 | On-screen keyboard | Ctrl+K or Controls > On-screen keyboard. iOS hides it while a hardware keyboard (iDesktop) is attached; this toggles it back |
 | Classic window | Controls > Classic window (toolbar, accessibility and clipboard panels) |
 
+### Floating controls
+
+Click the round **⋯** button next to the phone (or press Ctrl+M) for these buttons. Hover over any of them in the app for a reminder.
+
+| Button | What it does |
+|---|---|
+| **Home** | Goes to the home screen. Same as right-clicking the screen, or Ctrl+H. |
+| **App Switcher** | Shows your recent apps (swipe up and hold). |
+| **Back** | Swipes in from the left edge, which is "back" in most apps. |
+| **Control Center** | Swipes down from the top-right corner. |
+| **Notifications** | Swipes down from the top-left corner. |
+| **Spotlight** | Opens search on the home screen. |
+| **Siri** | Holds the side button to start Siri (Ctrl+S). |
+| **On-screen keyboard** | Shows or hides the iPhone's own keyboard (Ctrl+K). iOS hides it while your PC keyboard is connected, which iDesktop always is, so use this if you want it back. |
+| **Zoom in / Zoom out** | A two-finger pinch at the centre of the screen. Ctrl + mouse wheel pinches where the mouse is. *Needs Automation.* |
+| **Screenshot** | Saves the phone's screen to Downloads at full resolution (Ctrl+P). |
+| **Desktop Mode** | Switches the phone to extra-small text, so apps fit more on screen, a bit like an iPad. Click again to restore your text size. |
+| **PC sound: on / off** | Plays (or stops playing) the phone's sound through this PC. |
+| **Sound on PC only** | Turns the phone's volume down to its lowest step, so the PC plays at full volume while the phone stays almost silent. *Needs Automation.* |
+| **Automation: on / off** | Turns the [WebDriverAgent](#optional-extra-webdriveragent) helper on or off (see below). |
+| **Bigger / Smaller** | Resizes the phone (Ctrl+↑ / Ctrl+↓). |
+| **Classic window** | Switches to a normal window with a toolbar, accessibility settings, a clipboard panel and Big Screen. |
+| **Minimize / Quit** | Minimizes or closes iDesktop. |
+
+### Automation
+
+**Automation** is the WebDriverAgent helper running on your phone. It's Apple's UI-testing tool, installed as an [optional extra](#optional-extra-webdriveragent). iDesktop uses it for:
+
+- **Auto-rotate:** the mirror turns sideways when an app goes landscape.
+- **Pinch zoom.**
+- **Sound on PC only.**
+- **A backup picture during calls:** iOS stops sending the HD video while a call or the camera is active, so iDesktop shows Automation's lower-quality feed until HD returns.
+
+While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch, *Sound on PC only* and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
+
+If you haven't installed the WebDriverAgent extra, the Automation button doesn't appear at all.
+
 ### Sound
 
 Sound comes through the PC automatically, from any app except Apple Music, whose protected audio iOS won't share. The phone keeps playing too, because iOS has no "PC only" switch. **Controls > Sound on PC only** turns the phone's volume down to its lowest step, which keeps the PC copy at full volume. Volume 0 would mute both.

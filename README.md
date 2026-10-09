@@ -110,6 +110,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Dim phone** | Turns the phone's own screen down to minimum brightness. The mirror on your PC stays fully bright, so you can use the phone from the PC while it sits there almost dark. Click again (*Undim phone*) to bring it back. For near-black, also turn on Settings > Accessibility > Display & Text Size > *Reduce White Point*; you can put it on a triple-click with Accessibility Shortcut. |
 | **Automation: on / off** | Turns the [WebDriverAgent](#optional-extra-webdriveragent) helper on or off (see below). |
 | **Bigger / Smaller** | Resizes the phone (Ctrl+↑ / Ctrl+↓). |
+| **Refresh** | Reloads the viewer and reconnects the picture, if it ever looks frozen while taps still work (same as F5). iDesktop also does this by itself after reconnecting. |
 | **Classic window** | Switches to a normal window with a toolbar, accessibility settings, a clipboard panel and Big Screen. |
 | **Disconnect** | Stops mirroring and releases the phone (its "Automation Running" notice goes away too), but keeps the floating phone on your desktop with a **Reconnect** button. |
 | **Minimize / Quit** | Minimizes or closes iDesktop. |
@@ -179,6 +180,7 @@ It builds `WebDriverAgent.ipa` and walks you through sideloading it with [Sidelo
 | Black screen, "cannot decode the HD video" | Install [HEVC Video Extensions](https://apps.microsoft.com/detail/9NMZLZ57R3T7) and reopen iDesktop. |
 | HD stops during a call | iOS blocks screen streaming while the camera or mic is in use. HD comes back by itself after the call; with the WebDriverAgent extra you keep using the phone in [Lite mode](#lite-mode) meanwhile. |
 | Won't start without the cable | Start it once with the cable (that sets up Wi-Fi pairing), keep both on the same network, and unlock the phone. Networks that isolate devices from each other (guest or hotel Wi-Fi) won't work. |
+| Picture frozen, but taps still work | Click **Refresh** in the controls (or press F5 in the iDesktop window). |
 | Something else | Logs are in `%APPDATA%\iDesktop\logs`. Please attach `native.log` and `launcher.log` to an [issue](../../issues). |
 
 ## How it works

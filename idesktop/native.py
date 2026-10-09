@@ -228,6 +228,10 @@ async def _control_server(port: int) -> None:
 
 
 CTL_PORT = 0   # set in patch_screen_stream; the viewer page gets it via build_html
+# Changes every time the stream process starts. It's part of the page, so an open viewer's
+# self-update check sees a "new page" after a reconnect and reloads - its old video connection
+# died with the previous process.
+BOOT_ID = str(int(time.time() * 1000))
 MJPEG_PORT = 0   # local relay to WDA's MJPEG feed (device port 9100)
 CALL_BLOCKED_AT = 0.0
 STALLED_AT = 0.0        # last time a keyframe request failed to revive the video   # last time iOS refused the stream because of a call
@@ -468,6 +472,7 @@ def build_html(upstream: bytes, ext_port: int) -> bytes:
     layer = importlib.reload(viewer_layer)
     html = upstream.replace(b"</head>", layer.HEAD_INJECT.encode() + b"</head>", 1)
     body = (layer.BODY_INJECT.replace("__EXT_PORT__", str(ext_port)).replace("__CTL_PORT__", str(CTL_PORT))
+            .replace("__BOOT_ID__", BOOT_ID)
             .replace("__MJPEG_PORT__", str(MJPEG_PORT)))
     html = html.replace(b"</body>", body.encode() + b"</body>", 1)
     return html.replace(b"<title>pymobiledevice3 screen</title>", b"<title>iDesktop</title>")

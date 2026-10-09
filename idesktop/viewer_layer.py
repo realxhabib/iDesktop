@@ -78,6 +78,7 @@ BODY_INJECT = """
 <script>
 (() => {
   const EXT = 'http://127.0.0.1:__EXT_PORT__';
+  const BOOT = '__BOOT_ID__';   // stream process instance: a new one makes this page reload itself
   const report = (msg) => fetch(EXT + '/log', {method: 'POST', body: JSON.stringify({msg})}).catch(() => {});
   window.addEventListener('error', (e) => report((e.message || '') + ' @' + (e.lineno || '?') + ' ' + (e.error && e.error.stack || '')));
   window.addEventListener('unhandledrejection', (e) => report('rejection: ' + (e.reason && (e.reason.stack || e.reason))));
@@ -551,6 +552,7 @@ BODY_INJECT = """
     auto: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M2.5 12.5v3M21.5 12.5v3"/><circle cx="12" cy="4" r="1"/>',
     dim: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
     unplug: '<path d="M7 7l10 10M9 4v4M15 4v4M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
     kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
   };
@@ -583,6 +585,7 @@ BODY_INJECT = """
      ['auto', () => auto.wanted ? 'Automation: on' : 'Automation: off', () => setAutomation(!auto.wanted)]],
     [['plus', 'Bigger', () => resizeL(1.1)],
      ['minus', 'Smaller', () => resizeL(1 / 1.1)],
+     ['refresh', 'Refresh', () => location.reload()],
      ['layout', 'Classic window', () => { store('ext-compact', '0'); setMenu(false); window.fitCanvasToViewport(); }],
      ['unplug', 'Disconnect', () => disconnect()],
      ['min', 'Minimize', () => winCmd('min')],
@@ -801,6 +804,7 @@ BODY_INJECT = """
     auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and Lite mode during calls. ' +
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
+    refresh: 'Reload the viewer and reconnect the picture - if it ever looks frozen (also F5)',
     layout: 'Switch to the normal window with toolbar, accessibility and clipboard panels',
     dim: 'Turn the screen of the phone itself down to minimum brightness - the mirror here stays bright. ' +
          'For near-black, also set Settings > Accessibility > Display & Text Size > Reduce White Point',

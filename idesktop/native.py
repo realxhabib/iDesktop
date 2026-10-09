@@ -155,6 +155,37 @@ async def _keep_wda_running(server, bundle: str) -> None:
         await asyncio.sleep(5)
 
 
+async def _audio_watchdog(server) -> None:
+    """Restart the audio session when its RTP stops. iOS sends tiny packets even for silence, but
+    ends the session during a call without telling us; upstream then believes it's still running
+    and the PC stays silent after the call. Restarting fails (code 9022) until the call is over,
+    so keep trying with a back-off."""
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    last, quiet_since = -1, None
+    while True:
+        await asyncio.sleep(2)
+        if not server._audio_subscribers or server._audio_service is None:
+            last, quiet_since = -1, None
+            continue
+        n = server._audio_rtp_packets_received
+        if n != last:
+            last, quiet_since = n, None
+            continue
+        quiet_since = quiet_since or loop.time()
+        if loop.time() - quiet_since < 6:
+            continue
+        log.info("audio went quiet; restarting the audio session")
+        try:
+            await server._stop_audio_stream()
+            await server._ensure_audio_stream()
+        except Exception as e:
+            log.info("audio restart not possible yet (%s); retrying", type(e).__name__)
+            await asyncio.sleep(6)
+        last, quiet_since = -1, None
+
+
 async def _control_server(port: int) -> None:
     """Tiny HTTP endpoint for the viewer: GET/POST /automation (CORS, text/plain JSON body)."""
     import asyncio
@@ -342,6 +373,7 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
         await _mount_ddi(self._rsd)
         self._ext_tasks = [asyncio.create_task(_wda_relay(self, wda_port)),
                            asyncio.create_task(_control_server(CTL_PORT)),
+                           asyncio.create_task(_audio_watchdog(self)),
                            # WDA's own MJPEG screen feed: the viewer falls back to it while iOS
                            # sends no HD video (calls), then goes back to HD.
                            asyncio.create_task(_wda_relay(self, MJPEG_PORT, device_port=9100))]

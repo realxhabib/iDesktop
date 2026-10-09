@@ -28,7 +28,7 @@
 - **Sound**: the phone's audio plays on your PC, with an option to keep it quiet on the phone.
 - **Clipboard sync** both ways, text and images.
 - **Wireless**: after one wired start, it works over Wi-Fi with no cable and no admin rights.
-- **Big Screen and Desktop Mode**: blow the phone up to fill your monitor, optionally with denser iPad-like text.
+- **Desktop Mode**: extra-small text for denser, iPad-like layouts. The classic window also has a Big Screen mode that fills your monitor.
 - **Auto-rotate**, pinch zoom, screenshots at full resolution.
 
 Everything runs locally. Nothing is sent anywhere but between your PC and your phone.
@@ -82,7 +82,7 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 | Controls | The round **⋯** button next to the phone, Ctrl+M, or right-click the rim |
 | Bigger / smaller | Ctrl+↑ / Ctrl+↓ |
 | Side buttons | Click (or hold) the buttons on the rim: action, volume, power |
-| Big Screen | Controls > Big Screen (Esc to leave) |
+| Desktop Mode | Controls > Desktop Mode: extra-small, iPad-like text (click again to restore your text size) |
 | Screenshot | Ctrl+P, saved to Downloads at full resolution |
 | Keyboard | Just type. Alt = ⌘, Ctrl+L = lock, Ctrl+[ / ] = volume, Ctrl+S = Siri |
 | On-screen keyboard | Ctrl+K or Controls > On-screen keyboard. iOS hides it while a hardware keyboard (iDesktop) is attached; this toggles it back |

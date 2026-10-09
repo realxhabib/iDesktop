@@ -22,3 +22,6 @@ audio_dump.bin
 .claude/
 Thumbs.db
 desktop.ini
+
+# Draft demo recordings
+docs/demo-drafts/

@@ -213,7 +213,10 @@ BODY_INJECT = """
     if (on === deskOn) return;
     deskOn = on;
     deskBtn.textContent = on ? 'Exit Desktop Mode' : 'Desktop Mode';
-    setBig(on);   // first, while we still hold the click's user gesture (fullscreen needs it)
+    // Classic window: also go Big Screen (first, while we still hold the click's user gesture -
+    // fullscreen needs it). The floating phone is already as big as the screen: text only.
+    const floating = stored('ext-compact') !== '0';
+    if (!floating) setBig(on);
     if (on) {
       store('ext-desk', '1');
       if (!stored('ext-desk-text')) {
@@ -224,7 +227,8 @@ BODY_INJECT = """
         } catch (e) { store('ext-desk-text', 'large'); }
       }
       await setAx('text_size', 'extraSmall');
-      toast('Desktop Mode: extra-small text, full screen. Turn the phone sideways in an app that rotates to fill the width.');
+      toast(floating ? 'Desktop Mode: extra-small text for denser, iPad-like layouts.'
+                     : 'Desktop Mode: extra-small text, full screen. Turn the phone sideways in an app that rotates to fill the width.');
     } else {
       await setAx('text_size', stored('ext-desk-text') || 'large');
       store('ext-desk'); store('ext-desk-text');
@@ -562,7 +566,6 @@ BODY_INJECT = """
     [['zin', 'Zoom in', () => pinch(0.5, 0.5, 1.8)],
      ['zout', 'Zoom out', () => pinch(0.5, 0.5, 0.5)],
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
-     ['big', () => bigFloat ? 'Exit Big Screen' : 'Big Screen', () => setBig(!bigFloat)],
      ['desk', () => deskOn ? 'Exit Desktop Mode' : 'Desktop Mode', () => setDesktop(!deskOn)]],
     [['sound', () => soundOn() ? 'PC sound: on' : 'PC sound: off',
       () => { soundBtnUp?.click(); setTimeout(refreshLabels, 400); }],

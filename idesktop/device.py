@@ -134,8 +134,9 @@ def prepare_usb_device(udid: str, log: Log = print) -> None:
 
 
 def _lan_hosts() -> list[str]:
-    """Every other address on this PC's real IPv4 /24 networks (skips the iPhone's USB tether,
-    link-local, loopback and VPN-style /32s)."""
+    """Every other address on this PC's IPv4 /24 networks (skips link-local, loopback and
+    VPN-style /32s). On an iPhone hotspot (172.20.10.x, over Wi-Fi or USB) the phone is always
+    172.20.10.1, so that's the only address worth trying there."""
     import ipaddress
     cp = subprocess.run(["powershell", "-NoProfile", "-Command",
                          "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { \"$($_.IPAddress)/$($_.PrefixLength)\" }"],
@@ -147,7 +148,10 @@ def _lan_hosts() -> list[str]:
         except ValueError:
             continue
         ip = itf.ip
-        if ip.is_loopback or ip.is_link_local or itf.network.prefixlen > 30 or str(ip).startswith("172.20.10."):
+        if ip.is_loopback or ip.is_link_local or itf.network.prefixlen > 30:
+            continue
+        if str(ip).startswith("172.20.10."):
+            hosts.insert(0, "172.20.10.1")   # the phone itself, when the PC is on its hotspot
             continue
         net = ipaddress.ip_network(f"{ip}/24", strict=False)  # don't sweep huge networks
         hosts += [str(h) for h in net.hosts() if h != ip]

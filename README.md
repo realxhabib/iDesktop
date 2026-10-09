@@ -150,7 +150,7 @@ Sound comes through the PC automatically, from any app except Apple Music, whose
 
 ### Wireless
 
-There's nothing extra to set up: start iDesktop once with the cable, and from then on it also starts with no cable. Keep the PC and iPhone on the same Wi-Fi network; iDesktop finds the phone even if its address changes. If the connection drops (Wi-Fi hiccup, phone restarted, cable pulled), the window stays open and the mirror reconnects by itself.
+There's nothing extra to set up: start iDesktop once with the cable, and from then on it also starts with no cable. Keep the PC and iPhone on the same network (any Wi-Fi, or the PC on the iPhone's own Personal Hotspot); iDesktop finds the phone even if its address or the network changes. If the connection drops (Wi-Fi hiccup, phone restarted, cable pulled), the window stays open and the mirror reconnects by itself.
 
 Video over Wi-Fi depends on your network; a cable gives the lowest latency.
 

@@ -566,7 +566,7 @@ BODY_INJECT = """
      ['bell', 'Notifications', () => gestures['Notifications']()],
      ['search', 'Spotlight', () => gestures['Spotlight']()],
      ['siri', 'Siri', upClick('#bottom-row [data-btn="siri"]')],
-     ['kbd', 'On-screen keyboard', () => toggleKeyboard()]],
+     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()]],
     [['zin', 'Zoom in', () => pinch(0.5, 0.5, 1.8)],
      ['zout', 'Zoom out', () => pinch(0.5, 0.5, 0.5)],
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
@@ -691,8 +691,16 @@ BODY_INJECT = """
     placeOver(paused, showPaused);
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
-  const toggleKeyboard = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                                                 body: JSON.stringify({name: 'keyboard'})}).catch(() => {});
+  // iOS doesn't report the setting, but it sticks until toggled again, so track it here.
+  let kbdOn = stored('ext-kbd') === '1';
+  const toggleKeyboard = () => {
+    kbdOn = !kbdOn; store('ext-kbd', kbdOn ? '1' : '0');
+    toast(kbdOn ? 'On-screen keyboard on - the iPhone shows its keyboard in text fields'
+                : 'On-screen keyboard off - type with your PC keyboard');
+    refreshLabels();
+    return fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({name: 'keyboard'})}).catch(() => {});
+  };
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); toggleKeyboard(); }
   }, true);
@@ -764,7 +772,8 @@ BODY_INJECT = """
     bell: 'Swipe down from the top-left: notifications',
     search: 'Swipe down on the home screen: search',
     siri: 'Hold the side button for Siri (Ctrl+S)',
-    kbd: "Show/hide the iPhone's own keyboard. iOS hides it while your PC keyboard is connected (Ctrl+K)",
+    kbd: "Show/hide the iPhone's own keyboard in text fields. iOS hides it while your PC keyboard is connected (Ctrl+K). " +
+         "If you toggled it on the phone itself, click twice to resync",
     zin: 'Two-finger zoom in at the screen centre (or Ctrl + mouse wheel). Needs Automation',
     zout: 'Two-finger zoom out (or Ctrl + mouse wheel). Needs Automation',
     shot: 'Save a full-resolution screenshot to Downloads (Ctrl+P)',
@@ -803,6 +812,7 @@ BODY_INJECT = """
       if (p.icon === 'desk') p.el.classList.toggle('on', deskOn);
       if (p.icon === 'auto') p.el.classList.toggle('on', auto.wanted);
       if (p.icon === 'dim') p.el.classList.toggle('on', dimmed);
+      if (p.icon === 'kbd') p.el.classList.toggle('on', kbdOn);
       p.el.classList.toggle('needs-auto', NEEDS_AUTO.has(p.icon) && !auto.running);
     }
   }
@@ -875,7 +885,7 @@ BODY_INJECT = """
     if (sideways) { sw = L - 2 * E; sh = sw * natH / natW; } else { sh = L - 2 * E; sw = sh * natW / natH; }
     sw = Math.round(sw); sh = Math.round(sh);
     const pw = sw + 2 * E, ph = sh + 2 * E, sr = Math.round(Math.min(sw, sh) * 0.13), R = sr + E;
-    const PAD = 4, FAB = 42, PH = 36, PW = 178, CXR = pw + PAD + 14;   // controls column, relative
+    const PAD = 4, FAB = 42, PH = 36, PW = 204, CXR = pw + PAD + 14;   // controls column, relative
     if (full) {
       const maxX = innerWidth - (PAD + CXR + FAB + 4), maxY = innerHeight - ph - 2;
       posX = Math.max(0, Math.min(posX, maxX)); posY = Math.max(0, Math.min(posY, maxY));

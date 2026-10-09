@@ -633,7 +633,7 @@ BODY_INJECT = """
   }, 3000);
   setTimeout(() => window.fitCanvasToViewport(), 800);   // phone shape even before the first frame
 
-  // Basic-feed fallback: when HD video stops (iOS sends none during calls) and Automation is on,
+  // Lite mode: when HD video stops (iOS sends none during calls) and Automation is on,
   // show WebDriverAgent's MJPEG screen feed in the phone's screen instead of "Stream offline";
   // touch keeps going through the same HID path. Back to HD as soon as frames return.
   const MJPEG = 'http://127.0.0.1:__MJPEG_PORT__/';
@@ -666,7 +666,7 @@ BODY_INJECT = """
       basicOn = true;
       basic.style.display = 'block'; showBasic(false);
       startBasicFeed();
-      toast('HD paused by iOS - showing the basic feed until it returns');
+      toast('HD paused by iOS during the call - Lite mode: still live and controllable, at a lower frame rate');
     } else if (basicOn && (quiet < 1500 || !auto.running || !streamStalled)) {
       basicOn = false;
       basic.removeAttribute('src');               // closes the MJPEG connection
@@ -684,8 +684,8 @@ BODY_INJECT = """
     if (showPaused) {
       paused.textContent = callBlocked
         ? 'Paused by iOS during your call. HD comes back by itself after it ends.' +
-          (auto.available && !auto.running ? ' Turn on Automation (in the controls) to see a basic picture meanwhile.' :
-           auto.running ? ' Loading the basic picture…' : '')
+          (auto.available && !auto.running ? ' Turn on Automation (in the controls) to keep using it in Lite mode meanwhile.' :
+           auto.running ? ' Switching to Lite mode…' : '')
         : 'Reconnecting to the screen…';
     }
     placeOver(paused, showPaused);
@@ -771,7 +771,7 @@ BODY_INJECT = """
     desk: 'Extra-small text on the phone: denser, iPad-like layouts. Click again to restore your text size',
     sound: "Play the phone's sound on this PC (on/off)",
     pc: 'Turn the phone volume down to its lowest step: the PC keeps full volume, the phone is nearly silent. Needs Automation',
-    auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and a backup picture during calls. ' +
+    auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and Lite mode during calls. ' +
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
     layout: 'Switch to the normal window with toolbar, accessibility and clipboard panels',

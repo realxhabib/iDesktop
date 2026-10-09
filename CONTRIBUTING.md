@@ -28,12 +28,12 @@ py -3.13 -m venv .venv
 
 | Path | What |
 |---|---|
-| `idesktop/app.py` | Launcher: first-run setup, USB/Wi-Fi selection, reconnects, fallback to basic mode |
+| `idesktop/app.py` | Launcher: first-run setup, USB/Wi-Fi selection, reconnects, fallback to Lite mode |
 | `idesktop/native.py` | The HD stream process (pymobiledevice3 `serve-web` plus patches), and the helper process (pinch, orientation, window shaping) |
 | `idesktop/viewer_layer.py` | Everything injected into the viewer page: floating phone UI, controls, touch handling, rendering fixes |
 | `idesktop/winshape.py` | Clips the Edge window to the phone's shape |
 | `idesktop/device.py` | pymobiledevice3 helpers, config, first-run checks, Wi-Fi discovery |
-| `idesktop/controller.py`, `wda.py` | Basic mode: Tk viewer driven by WebDriverAgent |
+| `idesktop/controller.py`, `wda.py` | Lite mode: Tk viewer driven by WebDriverAgent |
 | `tools/` | Tests and dev helpers (`e2e_test.py`, `mock_wda.py`, `check_viewer_js.py`, `cdp.py`, `make_icon.py`, `make_ipa.py`) |
 
 ### Tips

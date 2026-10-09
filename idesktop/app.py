@@ -367,16 +367,16 @@ def _main() -> None:
             # Basic mode is WebDriverAgent's screenshot stream; without the extra there's no fallback.
             why = ("iOS pauses HD mirroring while a call or an app is using the camera or microphone."
                    if r == CAMERA_BUSY else "HD mirroring failed to start (see logs\\native.log).")
-            msg(why + "\n\nBasic mode (which also works during calls) needs the optional WebDriverAgent "
+            msg(why + "\n\nLite mode (which keeps working during calls) needs the optional WebDriverAgent "
                 "extra - see the README. Otherwise, try again after the call.", error=r != CAMERA_BUSY)
             return
         if r == CAMERA_BUSY:
             # iOS blocks the HD mirror while anything holds the camera/mic (calls, FaceTime...).
             # The WDA screenshot stream isn't subject to that, so keep working in basic mode.
             notice = ("HD mirroring is paused by iOS while a call or an app is using the camera/mic. "
-                      "Using basic mode; reopen iDesktop after the call for HD.")
+                      "Using Lite mode; reopen iDesktop after the call for HD.")
         else:
-            notice = "HD mirroring failed to start (see logs\\native.log); using basic mode."
+            notice = "HD mirroring failed to start (see logs\\native.log); using Lite mode."
         rest = [*rest, "--notice", notice]
         print(notice)
     sys.argv = [sys.argv[0], "--autoconnect", *rest]

@@ -38,7 +38,7 @@ Everything runs locally. Nothing is sent anywhere but between your PC and your p
 | | |
 |---|---|
 | PC | 64-bit Windows 10 (1809+) or Windows 11, with Microsoft Edge (preinstalled) |
-| iPhone | **iOS 27 or newer** for the HD mirror. iOS 17-26 only gets the basic mode (needs the [extra](#optional-extra-webdriveragent)). |
+| iPhone | **iOS 27 or newer** for the HD mirror. iOS 17-26 only gets Lite mode (needs the [extra](#optional-extra-webdriveragent)). |
 | Apple driver | The [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K) app or iTunes from the Microsoft Store (the installer gets it for you) |
 | Video | A GPU that decodes HEVC, plus Microsoft's [HEVC Video Extensions](https://apps.microsoft.com/detail/9NMZLZ57R3T7) on most PCs |
 | Cable | A USB cable for the first start; after that, Wi-Fi works too |
@@ -125,7 +125,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | Auto-rotate for landscape apps | – | ✅ |
 | Pinch zoom (Zoom in/out, Ctrl + wheel) | – | ✅ |
 | Sound on PC only | – | ✅ |
-| Picture during calls (lower-quality backup feed) | "Paused during your call" message | ✅ |
+| Keep using the phone during calls ([Lite mode](#lite-mode)) | "Paused during your call" message | ✅ |
 | "Automation Running" notice on the phone | none | shown |
 
 The buttons that need it look dimmed in the controls while it's off. In detail, iDesktop uses it for:
@@ -133,11 +133,15 @@ The buttons that need it look dimmed in the controls while it's off. In detail, 
 - **Auto-rotate:** the mirror turns sideways when an app goes landscape.
 - **Pinch zoom.**
 - **Sound on PC only.**
-- **A backup picture during calls:** iOS stops sending the HD video while a call or the camera is active, so iDesktop shows Automation's lower-quality feed until HD returns.
+- **[Lite mode](#lite-mode) during calls:** iOS stops sending the HD video while a call or the camera is active; iDesktop switches to Automation's own screen feed so you can keep using the phone until HD returns.
 
 While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch, *Sound on PC only* and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
 
 If you haven't installed the WebDriverAgent extra, the Automation button doesn't appear at all.
+
+### Lite mode
+
+During a phone or FaceTime call (or whenever an app is using the camera or microphone), iOS stops sending the HD video. With Automation on, iDesktop switches to **Lite mode** by itself: the phone stays live on your desktop and you keep controlling it as normal, at a lower frame rate and resolution. HD comes back automatically once the call ends. Without Automation you'll see a "paused during your call" message until then.
 
 ### Sound
 
@@ -154,7 +158,7 @@ Video over Wi-Fi depends on your network; a cable gives the lowest latency.
 These features need Appium's [WebDriverAgent](https://github.com/appium/WebDriverAgent) sideloaded onto the phone with your Apple ID:
 - Pinch zoom
 - Auto-rotate for landscape apps
-- **Basic mode**, which keeps working during phone and FaceTime calls (iOS pauses the HD mirror while the camera or microphone is in use)
+- **[Lite mode](#lite-mode)**, which keeps working during phone and FaceTime calls (iOS pauses the HD mirror while the camera or microphone is in use)
 - *Sound on PC only*
 
 To set it up:
@@ -173,7 +177,7 @@ It builds `WebDriverAgent.ipa` and walks you through sideloading it with [Sidelo
 | Trust prompt never appears / "Don't Trust" was tapped | Unplug. On the iPhone: Settings > General > Transfer or Reset iPhone > Reset > *Reset Location & Privacy*. Plug in again. |
 | No Developer Mode setting on the iPhone | Start iDesktop once with the cable; that makes iOS show it. |
 | Black screen, "cannot decode the HD video" | Install [HEVC Video Extensions](https://apps.microsoft.com/detail/9NMZLZ57R3T7) and reopen iDesktop. |
-| HD stops during a call | iOS blocks screen streaming while the camera or mic is in use. Reopen after the call, or install the WebDriverAgent extra for basic mode. |
+| HD stops during a call | iOS blocks screen streaming while the camera or mic is in use. HD comes back by itself after the call; with the WebDriverAgent extra you keep using the phone in [Lite mode](#lite-mode) meanwhile. |
 | Won't start without the cable | Start it once with the cable (that sets up Wi-Fi pairing), keep both on the same network, and unlock the phone. Networks that isolate devices from each other (guest or hotel Wi-Fi) won't work. |
 | Something else | Logs are in `%APPDATA%\iDesktop\logs`. Please attach `native.log` and `launcher.log` to an [issue](../../issues). |
 
@@ -188,7 +192,7 @@ iOS 27 includes CoreDevice's *DisplayService*, the same screen stream Xcode's de
   - Gestures, auto-rotate, Big Screen and Desktop Mode.
 - **Windows audio** (`idesktop/native.py`): an FFmpeg AAC-ELD decoder (upstream only supports macOS), a stall watchdog that survives calls, a Wi-Fi fallback straight to the phone's IP (no Bonjour needed), and a WebDriverAgent relay through the same tunnel.
 - **The floating window** (`idesktop/winshape.py`): Edge runs maximized and is clipped to the phone's shape with a window region. Maximized windows get no shadow or border, and the region makes everything outside the phone click-through.
-- **The launcher** (`idesktop/app.py`): first-run setup, picking USB or Wi-Fi, and falling back to the basic WebDriverAgent viewer (`idesktop/controller.py`).
+- **The launcher** (`idesktop/app.py`): first-run setup, picking USB or Wi-Fi, and falling back to the Lite-mode WebDriverAgent viewer (`idesktop/controller.py`).
 
 ## Development
 

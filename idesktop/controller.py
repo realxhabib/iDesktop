@@ -109,7 +109,7 @@ class App(tk.Tk):
             self.ip_var.set(args.ip)
         if getattr(args, "notice", None):
             self._log(args.notice)
-            self.title("iDesktop (basic mode)")
+            self.title("iDesktop (Lite mode)")
         if args.ip or args.autoconnect:
             self.after(200, self.connect)
 

@@ -9,5 +9,5 @@
 - Two-way clipboard sync.
 - Wireless: no cable and no admin rights after one wired start. It finds the phone on the network without Bonjour and reconnects by itself.
 - Auto-rotate for landscape apps.
-- Basic mode that keeps working during calls (WebDriverAgent, an optional extra).
+- Lite mode that keeps the mirror live and controllable during calls (WebDriverAgent, an optional extra).
 - One-line installer, uninstaller, and a first-run guide (Trust, Developer Mode, developer disk image).

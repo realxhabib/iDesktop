@@ -423,9 +423,9 @@ BODY_INJECT = """
     } catch (e) { return null; }
   }
 
-  let lastDrawAt = Date.now();
+  let lastDrawAt = Date.now(), everDrew = false;
   window.drawFrame = function (orig) {
-    lastDrawAt = Date.now();
+    lastDrawAt = Date.now(); everDrew = true;
     const fixed = fixFrame(orig);
     try { drawFixed(fixed || orig); } finally { if (fixed) fixed.close(); }
   };
@@ -632,6 +632,24 @@ BODY_INJECT = """
     } catch (e) {}
   }, 3000);
   setTimeout(() => window.fitCanvasToViewport(), 800);   // phone shape even before the first frame
+
+  // Upstream's viewer gives up for good if /codec keeps failing for ~10 s at startup - which it
+  // does for as long as a call blocks the stream. So if this page has never shown a frame, check
+  // now and then whether HD is available again and, if so, reload once to start the viewer fresh.
+  const loadedAt = Date.now();
+  setInterval(async () => {
+    if (everDrew || disconnected || Date.now() - loadedAt < 15000) return;
+    let last = 0;
+    try { last = +sessionStorage.getItem('ext-boot-reload') || 0; } catch (e) {}
+    if (Date.now() - last < 20000) return;                         // never loop
+    try {
+      const r = await fetch('/codec', {cache: 'no-store'});
+      if (r.ok && (await r.json()).description) {
+        try { sessionStorage.setItem('ext-boot-reload', String(Date.now())); } catch (e) {}
+        location.reload();
+      }
+    } catch (e) {}
+  }, 4000);
 
   // Lite mode: when HD video stops (iOS sends none during calls) and Automation is on,
   // show WebDriverAgent's MJPEG screen feed in the phone's screen instead of "Stream offline";

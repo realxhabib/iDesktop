@@ -78,24 +78,112 @@ from . import viewer_layer  # HEAD_INJECT / BODY_INJECT live there (hot-reloaded
 
 
 
+class _Automation:
+    """WebDriverAgent on/off. While it runs iOS shows its "Automation Running" overlay, and holding
+    both volume buttons ends it - so that's honoured as "off" instead of relaunching, and the
+    viewer can switch it on/off too. The choice is remembered in the config ("automation")."""
+    available = False   # a WDA bundle is known
+    wanted = True
+    running = False
+    run_task = None
+    changed = None      # asyncio.Event, created on the stream's loop
+
+    @classmethod
+    def load(cls) -> None:
+        from . import device
+        cls.wanted = bool(device.load_config().get("automation", True))
+
+    @classmethod
+    def set(cls, on: bool) -> None:
+        from . import device
+        cls.wanted = on
+        cfg = device.load_config()
+        cfg["automation"] = on
+        device.save_config(cfg)
+        if cls.changed is not None:
+            cls.changed.set()
+        if not on and cls.run_task is not None:
+            cls.run_task.cancel()   # ends the XCUITest session -> iOS removes the overlay
+
+    @classmethod
+    def state(cls) -> dict:
+        return {"available": cls.available, "wanted": cls.wanted, "running": cls.running}
+
+
 async def _keep_wda_running(server, bundle: str) -> None:
     """Run the WDA XCUITest runner on the stream's own tunnel (a second tunnel to the same phone
-    tears the first one down), relaunching it if it ever exits."""
+    tears the first one down). Relaunch it after a failure; leave it off when the user stopped it
+    on the phone (it had been running fine) or switched it off in the viewer."""
     import asyncio
     from pymobiledevice3.services.dvt.testmanaged.xcuitest import TestConfig, XCUITestService
 
+    A = _Automation
+    A.available, A.changed = True, asyncio.Event()
+    loop = asyncio.get_running_loop()
     while True:
+        if not A.wanted:
+            A.running = False
+            A.changed.clear()
+            await A.changed.wait()
+            continue
         provider = server._rsd  # re-read: the server swaps in a fresh tunnel after reconnects
+        t0 = loop.time()
         try:
             cfg = await TestConfig.create_for(provider, runner_bundle_id=bundle)
             log.info("launching WebDriverAgent (%s) on the stream tunnel", bundle)
-            await XCUITestService(provider).run(cfg)
+            A.run_task = asyncio.create_task(XCUITestService(provider).run(cfg))
+            A.running = True
+            try:
+                await A.run_task
+            except asyncio.CancelledError:
+                if A.run_task.cancelled() and not A.wanted:
+                    log.info("WebDriverAgent switched off from the viewer")
+                    continue
+                raise
+            finally:
+                A.running, A.run_task = False, None
+            if A.wanted and loop.time() - t0 > 20:
+                log.info("WebDriverAgent was stopped on the phone; leaving automation off")
+                A.set(False)
+                continue
             log.warning("WebDriverAgent runner exited; relaunching")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             log.warning("WebDriverAgent runner failed: %s: %s; retrying in 5s", type(e).__name__, e)
         await asyncio.sleep(5)
+
+
+async def _control_server(port: int) -> None:
+    """Tiny HTTP endpoint for the viewer: GET/POST /automation (CORS, text/plain JSON body)."""
+    import asyncio
+
+    async def handle(reader, writer) -> None:
+        try:
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
+            lines = head.decode("latin-1").split("\r\n")
+            method, path = (lines[0].split() + ["", ""])[:2]
+            length = next((int(l.split(":", 1)[1]) for l in lines[1:] if l.lower().startswith("content-length:")), 0)
+            body = await reader.readexactly(length) if length else b""
+            route = path.split("?")[0]
+            if route == "/automation" and method == "POST":
+                _Automation.set(bool(json.loads(body or b"{}").get("on")))
+            code = "200 OK" if route == "/automation" else "404 Not Found"
+            out = json.dumps(_Automation.state()).encode()
+            writer.write(f"HTTP/1.1 {code}\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\n"
+                         f"Content-Length: {len(out)}\r\nConnection: close\r\n\r\n".encode() + out)
+            await writer.drain()
+        except Exception:
+            pass
+        finally:
+            writer.close()
+
+    srv = await asyncio.start_server(handle, "127.0.0.1", port)
+    async with srv:
+        await srv.serve_forever()
+
+
+CTL_PORT = 0   # set in patch_screen_stream; the viewer page gets it via build_html
 
 
 async def _wda_relay(server, port: int, device_port: int = 8100) -> None:
@@ -209,6 +297,10 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
     import asyncio
     from pymobiledevice3.remote.core_device import screen_stream as ss
 
+    global CTL_PORT
+    from .device import free_port
+    CTL_PORT = free_port(ext_port + 10)
+    _Automation.load()
     ss.AACELDDecoder = FFmpegAACELDDecoder
     # iOS hides the on-screen keyboard while a hardware keyboard (ours) is attached; the
     # keyboard's Eject key (Consumer 0xB8) toggles it back, as on Apple's Magic Keyboard.
@@ -219,7 +311,8 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
 
     async def serve(self, *a, **kw):
         await _mount_ddi(self._rsd)
-        self._ext_tasks = [asyncio.create_task(_wda_relay(self, wda_port))]
+        self._ext_tasks = [asyncio.create_task(_wda_relay(self, wda_port)),
+                           asyncio.create_task(_control_server(CTL_PORT))]
         if wda_bundle:
             self._ext_tasks.append(asyncio.create_task(_keep_wda_running(self, wda_bundle)))
         return await orig_serve(self, *a, **kw)
@@ -290,7 +383,8 @@ def build_html(upstream: bytes, ext_port: int) -> bytes:
     import importlib
     layer = importlib.reload(viewer_layer)
     html = upstream.replace(b"</head>", layer.HEAD_INJECT.encode() + b"</head>", 1)
-    html = html.replace(b"</body>", layer.BODY_INJECT.replace("__EXT_PORT__", str(ext_port)).encode() + b"</body>", 1)
+    body = layer.BODY_INJECT.replace("__EXT_PORT__", str(ext_port)).replace("__CTL_PORT__", str(CTL_PORT))
+    html = html.replace(b"</body>", body.encode() + b"</body>", 1)
     return html.replace(b"<title>pymobiledevice3 screen</title>", b"<title>iDesktop</title>")
 
 

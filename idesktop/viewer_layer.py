@@ -32,6 +32,10 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
               font:12px system-ui; padding:6px 12px; border-radius:8px; pointer-events:none; opacity:0;
               transition:opacity .25s }
  #ext-toast.show { opacity:1 }
+ /* Only show "Stream offline" when it lasts: brief gaps (window brought back from the background,
+    a dropped keyframe, a still screen) recover by themselves within a second or two. */
+ #offline-overlay:not(.hidden) { animation:ext-late 3s steps(1, end) both }
+ @keyframes ext-late { from { opacity:0; visibility:hidden } to { opacity:1; visibility:visible } }
  /* Floating iPhone: the helper clips the browser window to the phone body, its side buttons and
     the floating controls (winshape.py), so everything else is see-through desktop. */
  html:has(body.ext-compact), body.ext-compact { background:#000 !important; overflow:hidden; margin:0 }
@@ -270,7 +274,7 @@ BODY_INJECT = """
   }
 
   // Mouse wheel = scroll (drag), Ctrl + wheel = pinch zoom, Shift + wheel = sideways.
-  let acc = 0, accX = 0, wheelT = 0, at = null, zoomAcc = 0, zoomT = 0;
+  let zoomAcc = 0, zoomT = 0;
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const p = touchCoords(e);   // viewer.js global: rotation-aware client -> HID 0..65535
@@ -279,17 +283,43 @@ BODY_INJECT = """
       zoomT = setTimeout(() => { const s = zoomAcc < 0 ? 1.8 : 0.55; zoomAcc = 0; pinch(p.x/65535, p.y/65535, s); }, 120);
       return;
     }
-    if (e.shiftKey) accX += e.deltaY; else { acc += e.deltaY; accX += e.deltaX; }
-    at = p; clearTimeout(wheelT);
-    wheelT = setTimeout(async () => {
-      const dy = Math.max(-38000, Math.min(38000, -acc * 55));
-      const dx = Math.max(-38000, Math.min(38000, -accX * 55));
-      acc = accX = 0;
-      const clamp = (v, d) => Math.max(3000 - Math.min(d, 0), Math.min(62500 - Math.max(d, 0), v));
-      const x0 = clamp(at.x, dx), y0 = clamp(at.y, dy);
-      await drag(x0, y0, x0 + dx, y0 + dy, 160, 70, 8);
-    }, 70);
+    wheelScroll(e, p);
   }, {passive: false});
+
+  // Wheel scrolling as one continuous finger, like a trackpad: touch down on the first tick, move
+  // with every tick, lift shortly after the wheel stops (iOS adds its own momentum on the lift).
+  // One gesture at a time - separate overlapping swipes per burst of ticks made the finger jump.
+  const WHEEL_GAIN = 45, WHEEL_IDLE_MS = 110, LO = 4000, HI = 61500;
+  let wheelDown = false, wx = 0, wy = 0, wheelIdle = 0;
+  function wheelScroll(e, p) {
+    if (activePointer !== null) return;          // a real mouse drag is in progress
+    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;   // lines / pages -> px
+    let dx = (e.shiftKey ? e.deltaY : e.deltaX) * unit, dy = (e.shiftKey ? 0 : e.deltaY) * unit;
+    dx = -dx * WHEEL_GAIN; dy = -dy * WHEEL_GAIN;
+    if (!wheelDown) {
+      // Start where the mouse is, but leave room to travel in the scroll direction.
+      wx = Math.max(LO, Math.min(HI, p.x)); wy = Math.max(LO, Math.min(HI, p.y));
+      if (dy > 0) wy = Math.min(wy, 26000); else if (dy < 0) wy = Math.max(wy, 39500);
+      if (dx > 0) wx = Math.min(wx, 26000); else if (dx < 0) wx = Math.max(wx, 39500);
+      wheelDown = true;
+      touch('contact', wx, wy);
+    }
+    let nx = wx + dx, ny = wy + dy;
+    if (nx < LO || nx > HI || ny < LO || ny > HI) {
+      // Ran out of screen: lift here and carry on from the other side (like re-placing a finger).
+      nx = Math.max(LO, Math.min(HI, nx)); ny = Math.max(LO, Math.min(HI, ny));
+      touch('contact', nx, ny);
+      touch('release', nx, ny);
+      wx = dx > 0 ? LO + 2000 : dx < 0 ? HI - 2000 : wx;
+      wy = dy > 0 ? LO + 2000 : dy < 0 ? HI - 2000 : wy;
+      touch('contact', wx, wy);
+    } else {
+      wx = nx; wy = ny;
+      touch('contact', wx, wy);
+    }
+    clearTimeout(wheelIdle);
+    wheelIdle = setTimeout(() => { wheelDown = false; touch('release', wx, wy); }, WHEEL_IDLE_MS);
+  }
 
   // Sharp text: upstream keeps the canvas at the full 1320x2868 stream size and lets CSS shrink
   // it ~3x with `image-rendering:-webkit-optimize-contrast`, which Chromium treats as
@@ -496,6 +526,7 @@ BODY_INJECT = """
     plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>',
     layout: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
     min: '<path d="M6 18h12"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    auto: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M2.5 12.5v3M21.5 12.5v3"/><circle cx="12" cy="4" r="1"/>',
     kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
   };
@@ -524,13 +555,38 @@ BODY_INJECT = """
        try { const r = await fetch(EXT + '/volume', {method: 'POST', body: '{}'});
              toast(r.ok ? 'Phone volume is 1 - the sound plays on the PC' : 'Could not set the volume'); }
        catch (e) { toast('Helper not running'); }
-     }]],
+     }],
+     ['auto', () => auto.wanted ? 'Automation: on' : 'Automation: off', () => setAutomation(!auto.wanted)]],
     [['plus', 'Bigger', () => resizeL(1.1)],
      ['minus', 'Smaller', () => resizeL(1 / 1.1)],
      ['layout', 'Classic window', () => { store('ext-compact', '0'); setMenu(false); window.fitCanvasToViewport(); }],
      ['min', 'Minimize', () => winCmd('min')],
      ['close', 'Quit', () => winCmd('close'), 'danger']],
   ];
+  // Automation = WebDriverAgent (auto-rotate, pinch, "Sound on PC only"). While it runs iOS shows
+  // "Automation Running"; holding both volume buttons on the phone also turns it off.
+  const CTL = 'http://127.0.0.1:__CTL_PORT__/automation';
+  let auto = {available: false, wanted: false, running: false};
+  async function pollAutomation() {
+    const prev = auto;
+    try {
+      auto = await (await fetch(CTL, {cache: 'no-store'})).json();
+      if (prev.wanted && !auto.wanted) toast('Automation off - auto-rotate and pinch paused');
+    } catch (e) {}
+    pills.find(p => p.icon === 'auto')?.el.classList.toggle('hidden-pill', !auto.available);
+    refreshLabels();
+    if (prev.available !== auto.available) window.fitCanvasToViewport();   // re-shape the controls
+  }
+  async function setAutomation(on) {
+    try {
+      auto = await (await fetch(CTL, {method: 'POST', body: JSON.stringify({on})})).json();
+      toast(on ? 'Automation on - auto-rotate and pinch available' :
+                 'Automation off - no overlay on the phone; auto-rotate and pinch paused');
+    } catch (e) { toast('Could not reach the stream'); }
+    refreshLabels();
+  }
+  setInterval(pollAutomation, 3000);
+  setTimeout(pollAutomation, 500);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
   const toggleKeyboard = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                                  body: JSON.stringify({name: 'keyboard'})}).catch(() => {});
@@ -549,6 +605,7 @@ BODY_INJECT = """
       p.el.querySelector('span').textContent = typeof p.label === 'function' ? p.label() : p.label;
       if (p.icon === 'sound') p.el.classList.toggle('on', soundOn());
       if (p.icon === 'desk') p.el.classList.toggle('on', deskOn);
+      if (p.icon === 'auto') p.el.classList.toggle('on', auto.wanted);
     }
   }
   const fab = document.createElement('div'); fab.className = 'ext-fab'; fab.title = 'Controls (Ctrl+M)';
@@ -653,7 +710,8 @@ BODY_INJECT = """
     shapes.push({x: CX, y: OY, w: FAB, h: FAB, r: FAB / 2});
     let y = FAB + 12;
     for (const p of pills) {
-      p.el.classList.toggle('show', menuOpen);
+      p.el.classList.toggle('show', menuOpen && !p.el.classList.contains('hidden-pill'));
+      if (!p.el.classList.contains('show')) continue;
       if (!menuOpen) continue;
       if (p.gap) y += 10;
       place(p.el, 0, y, PW, PH, PH / 2);
@@ -702,12 +760,26 @@ BODY_INJECT = """
 
   // Self-update: the server rebuilds this page from viewer_layer.py on every load; when it
   // changes, reload so new buttons/fixes appear without touching the stream session.
-  let pageText = null;
+  let pageText = null, lastInputAt = Date.now();
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'keydown', 'wheel'])
+    window.addEventListener(ev, () => { lastInputAt = Date.now(); }, {capture: true, passive: true});
+  // Back from the background: ask for a keyframe right away (~0.1-0.3 s) instead of waiting for
+  // the encoder's next one; /pli is upstream's lightweight recovery (no stream restart).
+  let pliAt = 0;
+  const freshFrame = () => {
+    if (document.visibilityState !== 'visible' || Date.now() - pliAt < 2000) return;
+    pliAt = Date.now();
+    fetch('/pli', {method: 'POST', cache: 'no-store'}).catch(() => {});
+  };
+  document.addEventListener('visibilitychange', freshFrame);
+  window.addEventListener('focus', freshFrame);
   setInterval(async () => {
     try {
       const t = await (await fetch('/', {cache: 'no-store'})).text();
       if (pageText === null) pageText = t;
-      else if (t !== pageText && !activePointer) location.reload();
+      // Don't reload mid-touch - unless the "touch" is stale (a drag that ended outside the window
+      // can leave activePointer set, which used to block updates for good).
+      else if (t !== pageText && (!activePointer || Date.now() - lastInputAt > 10000)) location.reload();
     } catch (e) {}
   }, 4000);
 

@@ -128,7 +128,12 @@ def open_app_window(url: str) -> subprocess.Popen | None:
     return subprocess.Popen([exe, f"--app={url}", f"--window-size={w},{h}", f"--window-position=20,{top}",
                              f"--user-data-dir={profile}",
                              "--no-first-run", "--no-default-browser-check",
-                             "--autoplay-policy=no-user-gesture-required", *extra])
+                             "--autoplay-policy=no-user-gesture-required",
+                             # Keep decoding while the window is in the background/covered: if
+                             # Edge throttles it, coming back shows a stale frame and "Stream
+                             # offline" until the next keyframe.
+                             "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
+                             "--disable-background-timer-throttling", *extra])
 
 
 # ------------------------------------------------------------------ native session

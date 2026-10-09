@@ -133,7 +133,11 @@ def open_app_window(url: str) -> subprocess.Popen | None:
                              # Edge throttles it, coming back shows a stale frame and "Stream
                              # offline" until the next keyframe.
                              "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
-                             "--disable-background-timer-throttling", *extra])
+                             "--disable-background-timer-throttling",
+                             # Edge signs this private profile into the Windows account and syncs
+                             # the user's extensions into it, which then open their own windows.
+                             "--disable-extensions", "--disable-component-extensions-with-background-pages",
+                             "--disable-sync", *extra])
 
 
 # ------------------------------------------------------------------ native session

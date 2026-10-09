@@ -290,13 +290,18 @@ BODY_INJECT = """
   // Wheel scrolling as one continuous finger, like a trackpad: touch down on the first tick, move
   // with every tick, lift shortly after the wheel stops (iOS adds its own momentum on the lift).
   // One gesture at a time - separate overlapping swipes per burst of ticks made the finger jump.
-  const WHEEL_GAIN = 45, WHEEL_IDLE_MS = 110, LO = 4000, HI = 61500;
-  let wheelDown = false, wx = 0, wy = 0, wheelIdle = 0;
+  // WHEEL_GAIN: finger travel (HID units, 0..65535 = full screen) per wheel pixel; one notch is ~100 px.
+  // The finger rests WHEEL_REST_MS before lifting, which keeps iOS from adding much momentum.
+  // localStorage 'ext-wheel' scales the speed (e.g. 1.5 = faster).
+  const WHEEL_GAIN = 22 * (parseFloat(stored('ext-wheel')) || 1), WHEEL_IDLE_MS = 90, WHEEL_REST_MS = 70;
+  const LO = 4000, HI = 61500;
+  let wheelDown = false, wheelResting = false, wx = 0, wy = 0, wheelIdle = 0;
   function wheelScroll(e, p) {
     if (activePointer !== null) return;          // a real mouse drag is in progress
     const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;   // lines / pages -> px
     let dx = (e.shiftKey ? e.deltaY : e.deltaX) * unit, dy = (e.shiftKey ? 0 : e.deltaY) * unit;
     dx = -dx * WHEEL_GAIN; dy = -dy * WHEEL_GAIN;
+    if (!wheelDown && wheelResting) { wheelResting = false; wheelDown = true; }   // resumed mid-rest: same finger
     if (!wheelDown) {
       // Start where the mouse is, but leave room to travel in the scroll direction.
       wx = Math.max(LO, Math.min(HI, p.x)); wy = Math.max(LO, Math.min(HI, p.y));
@@ -319,7 +324,12 @@ BODY_INJECT = """
       touch('contact', wx, wy);
     }
     clearTimeout(wheelIdle);
-    wheelIdle = setTimeout(() => { wheelDown = false; touch('release', wx, wy); }, WHEEL_IDLE_MS);
+    wheelIdle = setTimeout(async () => {
+      wheelDown = false; wheelResting = true;
+      await touch('contact', wx, wy);         // hold still a moment: lift with little momentum
+      await sleep(WHEEL_REST_MS);
+      if (wheelResting) { wheelResting = false; touch('release', wx, wy); }
+    }, WHEEL_IDLE_MS);
   }
 
   // Sharp text: upstream keeps the canvas at the full 1320x2868 stream size and lets CSS shrink

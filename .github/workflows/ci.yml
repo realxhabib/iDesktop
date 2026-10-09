@@ -25,6 +25,10 @@ jobs:
           python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Compile
         run: python -m compileall -q idesktop tools
+      - name: Lint (undefined names etc.)
+        run: python -m pyflakes idesktop tools
+      - name: Smoke test (code paths that normally need a phone)
+        run: python tools/smoke_test.py
       - name: Viewer JavaScript syntax
         run: python tools/check_viewer_js.py
       - name: Installer scripts parse

@@ -228,7 +228,7 @@ def start_tunneld_elevated(log: Log) -> bool:
     if tunneld_devices() is not None:
         return True
     log("Starting tunneld as Administrator (approve the UAC prompt)...")
-    params = f'-m pymobiledevice3 remote tunneld --wifi --usb'
+    params = '-m pymobiledevice3 remote tunneld --wifi --usb'
     rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", _python(), params, None, 7)  # 7 = minimized
     if rc <= 32:
         log("UAC was declined or failed; tunneld not started.")

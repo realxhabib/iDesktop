@@ -1,9 +1,11 @@
-"""Phone-only window: clip the viewer's browser window to the phone (and the side menu) shape.
+"""Floating phone: clip the viewer's Edge window to the phone, its side buttons and controls.
 
-The browser window keeps its normal frame; we only give it a window region, so the title bar
-and borders are cut away rather than restyled (Chromium redraws its own frame styles, a region
-it leaves alone). The page reports its layout in CSS pixels; everything here is in physical
-pixels relative to the window's top-left corner.
+The window is maximized (maximized windows get no DWM shadow or border) and given a window
+region of the shapes the page reports; outside them it is invisible and click-through. Edge's
+Mica backdrop ignores regions, so it's switched off while clipped. Don't restyle the window
+(caption bits, colour keys, NC rendering): that flips Chromium to its custom frame, which wipes
+the region on every move. The page reports shapes in CSS pixels; regions are physical pixels
+relative to the window's top-left corner.
 """
 from __future__ import annotations
 
@@ -35,6 +37,11 @@ SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x2, 0x1, 0x4, 0x10
 RGN_OR = 2
 WM_CLOSE, SW_MINIMIZE, SW_RESTORE, SW_MAXIMIZE = 0x0010, 6, 9, 3
 
+_lock = threading.Lock()
+_hwnd = None
+_last_spec = None      # the shape to keep (None: unclipped)
+_watch = None
+
 
 def _set_backdrop(hwnd, kind: int) -> None:
     """Windows 11 paints the window's Mica backdrop (DWMWA_SYSTEMBACKDROP_TYPE, 38) over the whole
@@ -49,6 +56,12 @@ def _set_backdrop(hwnd, kind: int) -> None:
         dwm.DwmSetWindowAttribute(wintypes.HWND(hwnd), 34, ctypes.byref(c), 4)
     except Exception:
         pass
+
+
+def _rect(hwnd) -> wintypes.RECT:
+    r = wintypes.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(r))
+    return r
 
 
 def find_window():

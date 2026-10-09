@@ -18,7 +18,7 @@ from pathlib import Path
 import requests
 
 from . import device
-from .device import CONFIG_DIR, DeviceManager, pmd, pmd_bg, tunneld_devices, usbmuxd_running
+from .device import CONFIG_DIR, DeviceManager, pmd, tunneld_devices, usbmuxd_running
 
 LOGS = CONFIG_DIR / "logs"
 NATIVE_MIN_IOS = 27

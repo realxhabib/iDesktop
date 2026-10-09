@@ -371,7 +371,7 @@ class Helper(BaseHTTPRequestHandler):
                     w._s("POST", "/wda/pressButton", {"name": "volumeDown"})
                 w._s("POST", "/wda/pressButton", {"name": "volumeUp"})
                 return self._reply(200)
-            except Exception as e:
+            except Exception:
                 Helper._wda = None
                 return self._reply(503, "needs WebDriverAgent - an optional extra, see the README")
         if self.path != "/pinch":
@@ -381,7 +381,7 @@ class Helper(BaseHTTPRequestHandler):
             W, H = w.size
             w.pinch(float(body["x"]) * W, float(body["y"]) * H, float(body["scale"]))
             self._reply(200)
-        except Exception as e:
+        except Exception:
             Helper._wda = None  # force a fresh session next time
             self._reply(503, "needs WebDriverAgent - an optional extra, see the README")
 

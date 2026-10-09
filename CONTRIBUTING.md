@@ -47,6 +47,8 @@ py -3.13 -m venv .venv
 
 ```powershell
 .venv\Scripts\python -m compileall -q idesktop tools
+.venv\Scripts\python -m pyflakes idesktop tools
+.venv\Scripts\python tools\smoke_test.py
 .venv\Scripts\python tools\check_viewer_js.py     # needs Node.js
 .venv\Scripts\python tools\e2e_test.py
 ```

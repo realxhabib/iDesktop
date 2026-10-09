@@ -64,6 +64,7 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
  .ext-fab { justify-content:center; border-radius:50% }
  .ext-pill { padding:0 14px 0 12px; border-radius:999px; white-space:nowrap }
  .ext-pill.on { border-color:#0a84ff; color:#fff }
+ .ext-pill.needs-auto { opacity:.45 }
  .ext-pill.danger:hover { background:linear-gradient(180deg,#5a2224,#3d1618); border-color:#8a2c30 }
  .ext-fab svg, .ext-pill svg { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9;
    stroke-linecap:round; stroke-linejoin:round; opacity:.92 }
@@ -548,6 +549,8 @@ BODY_INJECT = """
     layout: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
     min: '<path d="M6 18h12"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>',
     auto: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M2.5 12.5v3M21.5 12.5v3"/><circle cx="12" cy="4" r="1"/>',
+    dim: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+    unplug: '<path d="M7 7l10 10M9 4v4M15 4v4M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
     kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
   };
@@ -576,10 +579,12 @@ BODY_INJECT = """
              toast(r.ok ? 'Phone volume is 1 - the sound plays on the PC' : 'Could not set the volume'); }
        catch (e) { toast('Helper not running'); }
      }],
+     ['dim', () => dimmed ? 'Undim phone' : 'Dim phone', () => toggleDim()],
      ['auto', () => auto.wanted ? 'Automation: on' : 'Automation: off', () => setAutomation(!auto.wanted)]],
     [['plus', 'Bigger', () => resizeL(1.1)],
      ['minus', 'Smaller', () => resizeL(1 / 1.1)],
      ['layout', 'Classic window', () => { store('ext-compact', '0'); setMenu(false); window.fitCanvasToViewport(); }],
+     ['unplug', 'Disconnect', () => disconnect()],
      ['min', 'Minimize', () => winCmd('min')],
      ['close', 'Quit', () => winCmd('close'), 'danger']],
   ];
@@ -661,7 +666,12 @@ BODY_INJECT = """
       basic.style.display = 'none';
       document.body.classList.remove('ext-basic-on');
     }
-    if (basicOn) placeBasic();
+    if (basicOn) {
+      placeBasic();
+      // Chromium doesn't reliably fire 'load' for an MJPEG stream; a decoded picture has a size.
+      if (basic.naturalWidth > 0) basic.style.visibility = 'visible';
+    }
+    if (disconnected) placeDisc();   // follows the phone when it's dragged
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
   const toggleKeyboard = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -669,6 +679,53 @@ BODY_INJECT = """
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); toggleKeyboard(); }
   }, true);
+  // Buttons that only work while Automation (WebDriverAgent) runs: shown dimmed when it's off.
+  const NEEDS_AUTO = new Set(['zin', 'zout', 'pc']);
+  // Dim the phone's own screen (keyboard brightness keys); the captured picture isn't affected.
+  let dimmed = stored('ext-dim') === '1';
+  async function press(name, n) {
+    for (let i = 0; i < n; i++) {
+      await fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify({name})}).catch(() => {});
+      await sleep(60);
+    }
+  }
+  async function toggleDim() {
+    dimmed = !dimmed; store('ext-dim', dimmed ? '1' : '0'); refreshLabels();
+    if (dimmed) { await press('brightness-down', 16); toast('Phone screen dimmed - the mirror stays bright'); }
+    else { await press('brightness-up', 8); toast('Phone screen back to medium brightness'); }
+  }
+  // Disconnect: the stream process ends (phone released); the launcher keeps this window and
+  // waits for Reconnect, which goes through the helper because the stream server is gone.
+  const disc = document.createElement('div');
+  disc.id = 'ext-disc';
+  disc.innerHTML = '<div>Disconnected from your iPhone</div><button class="btn" type="button">Reconnect</button>';
+  disc.style.cssText = 'position:fixed;display:none;z-index:16;background:#000;color:#ddd;font:14px system-ui;' +
+    'flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center';
+  document.body.appendChild(disc);
+  let disconnected = false;
+  function placeDisc() {
+    const r = canvas.getBoundingClientRect();
+    Object.assign(disc.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
+                               borderRadius: canvas.style.borderRadius || '0', display: disconnected ? 'flex' : 'none'});
+  }
+  async function disconnect() {
+    disconnected = true; setMenu(false); placeDisc();
+    disc.querySelector('div').textContent = 'Disconnected from your iPhone';
+    try { await fetch(CTL.replace('/automation', '/disconnect'), {method: 'POST', body: '{}'}); } catch (e) {}
+  }
+  disc.querySelector('button').addEventListener('click', async () => {
+    disc.querySelector('div').textContent = 'Reconnecting…';
+    try { await fetch(EXT + '/reconnect', {method: 'POST', body: '{}'}); } catch (e) {}
+    for (let i = 0; i < 90; i++) {           // wait for the stream server to come back, then reload
+      await sleep(1000);
+      // Any answer from the page itself means the stream server is back (/codec may still be
+      // failing, e.g. during a call, until the video starts).
+      try { if ((await fetch('/', {cache: 'no-store'})).ok) { location.reload(); return; } } catch (e) {}
+    }
+    disc.querySelector('div').textContent = "Couldn't reconnect - is the iPhone nearby and unlocked?";
+  });
+  window.addEventListener('resize', () => { if (disconnected) placeDisc(); });
   const pills = [];
   // Hover help (also in the README's "Floating controls" table).
   const TIPS = {
@@ -690,13 +747,25 @@ BODY_INJECT = """
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
     layout: 'Switch to the normal window with toolbar, accessibility and clipboard panels',
+    dim: 'Turn the screen of the phone itself down to minimum brightness - the mirror here stays bright. ' +
+         'For near-black, also set Settings > Accessibility > Display & Text Size > Reduce White Point',
+    unplug: 'Stop mirroring and release the phone (the "Automation Running" notice goes away too). ' +
+            'The phone stays on your desktop with a Reconnect button',
     min: 'Minimize iDesktop', close: 'Close iDesktop',
   };
   groups.forEach((g, gi) => g.forEach(([icon, label, fn, cls], i) => {
     const el = document.createElement('div'); el.className = 'ext-pill' + (cls ? ' ' + cls : '');
     if (TIPS[icon]) el.title = TIPS[icon];
     el.innerHTML = svg(icon) + '<span></span>';
-    el.addEventListener('click', (e) => { e.stopPropagation(); fn(); setTimeout(refreshLabels, 60); });
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (NEEDS_AUTO.has(icon) && !auto.running) {
+        toast(auto.available ? 'Needs Automation - turn on "Automation" in this menu first'
+                             : 'Needs the optional WebDriverAgent extra (see the README)');
+        return;
+      }
+      fn(); setTimeout(refreshLabels, 60);
+    });
     extCtl.appendChild(el); pills.push({el, label, icon, gap: gi > 0 && i === 0});
   }));
   function refreshLabels() {
@@ -705,6 +774,8 @@ BODY_INJECT = """
       if (p.icon === 'sound') p.el.classList.toggle('on', soundOn());
       if (p.icon === 'desk') p.el.classList.toggle('on', deskOn);
       if (p.icon === 'auto') p.el.classList.toggle('on', auto.wanted);
+      if (p.icon === 'dim') p.el.classList.toggle('on', dimmed);
+      p.el.classList.toggle('needs-auto', NEEDS_AUTO.has(p.icon) && !auto.running);
     }
   }
   const fab = document.createElement('div'); fab.className = 'ext-fab'; fab.title = 'Controls (Ctrl+M)';

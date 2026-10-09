@@ -56,7 +56,8 @@ def helpers_import():
     from idesktop import app, controller, device, wda
     assert device.CONFIG_DIR.name == "iDesktop"
     assert callable(controller.main) and hasattr(wda, "WDA")
-    assert app.RECONNECT_EXIT == __import__("idesktop.native", fromlist=["x"]).RECONNECT_EXIT
+    native = __import__("idesktop.native", fromlist=["x"])
+    assert (app.RECONNECT_EXIT, app.DISCONNECT_EXIT, app.RECONNECT_FLAG) ==         (native.RECONNECT_EXIT, native.DISCONNECT_EXIT, native.RECONNECT_FLAG)
 
 
 check("winshape without a window", winshape_without_window)

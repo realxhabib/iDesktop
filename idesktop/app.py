@@ -149,6 +149,8 @@ def _alive(url: str) -> bool:
 
 
 RECONNECT_EXIT = 3   # native.py exits with this when its tunnel to the phone dies
+DISCONNECT_EXIT = 4  # ...and with this when the user clicked Disconnect
+RECONNECT_FLAG = "reconnect.request"
 
 
 def run_native(udid: str, transport: list[str], wda_bundle: str | None, wifi_host: str | None = None,
@@ -207,6 +209,17 @@ def run_native(udid: str, transport: list[str], wda_bundle: str | None, wifi_hos
             time.sleep(1)
             if stream.poll() is None:
                 continue
+            if stream.returncode == DISCONNECT_EXIT:
+                # The user clicked Disconnect: phone released, window kept. Wait for Reconnect
+                # (the viewer asks the helper, which drops a flag file) or for the window to close.
+                log("Disconnected by the user; waiting for Reconnect...")
+                flag = CONFIG_DIR / RECONNECT_FLAG
+                flag.unlink(missing_ok=True)
+                while win.poll() is None and not flag.exists():
+                    time.sleep(0.5)
+                flag.unlink(missing_ok=True)
+                if win.poll() is not None:
+                    break
             log(f"Lost the phone (stream exit code {stream.returncode}); reconnecting...")
             nxt = None
             while win.poll() is None and nxt is None:

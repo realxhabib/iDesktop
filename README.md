@@ -107,14 +107,28 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Desktop Mode** | Switches the phone to extra-small text, so apps fit more on screen, a bit like an iPad. Click again to restore your text size. |
 | **PC sound: on / off** | Plays (or stops playing) the phone's sound through this PC. |
 | **Sound on PC only** | Turns the phone's volume down to its lowest step, so the PC plays at full volume while the phone stays almost silent. *Needs Automation.* |
+| **Dim phone** | Turns the phone's own screen down to minimum brightness. The mirror on your PC stays fully bright, so you can use the phone from the PC while it sits there almost dark. Click again (*Undim phone*) to bring it back. For near-black, also turn on Settings > Accessibility > Display & Text Size > *Reduce White Point*; you can put it on a triple-click with Accessibility Shortcut. |
 | **Automation: on / off** | Turns the [WebDriverAgent](#optional-extra-webdriveragent) helper on or off (see below). |
 | **Bigger / Smaller** | Resizes the phone (Ctrl+↑ / Ctrl+↓). |
 | **Classic window** | Switches to a normal window with a toolbar, accessibility settings, a clipboard panel and Big Screen. |
+| **Disconnect** | Stops mirroring and releases the phone (its "Automation Running" notice goes away too), but keeps the floating phone on your desktop with a **Reconnect** button. |
 | **Minimize / Quit** | Minimizes or closes iDesktop. |
 
 ### Automation
 
-**Automation** is the WebDriverAgent helper running on your phone. It's Apple's UI-testing tool, installed as an [optional extra](#optional-extra-webdriveragent). iDesktop uses it for:
+**Automation** is the WebDriverAgent helper running on your phone. It's Apple's UI-testing tool, installed as an [optional extra](#optional-extra-webdriveragent). In short:
+
+| | Automation off (or not installed) | Automation on |
+|---|---|---|
+| HD mirror, touch, scrolling, keyboard, sound, clipboard | ✅ | ✅ |
+| Dim phone, Desktop Mode, screenshots, wireless | ✅ | ✅ |
+| Auto-rotate for landscape apps | – | ✅ |
+| Pinch zoom (Zoom in/out, Ctrl + wheel) | – | ✅ |
+| Sound on PC only | – | ✅ |
+| Picture during calls (lower-quality backup feed) | "Paused during your call" message | ✅ |
+| "Automation Running" notice on the phone | none | shown |
+
+The buttons that need it look dimmed in the controls while it's off. In detail, iDesktop uses it for:
 
 - **Auto-rotate:** the mirror turns sideways when an app goes landscape.
 - **Pinch zoom.**

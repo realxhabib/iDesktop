@@ -169,7 +169,12 @@ async def _control_server(port: int) -> None:
             route = path.split("?")[0]
             if route == "/automation" and method == "POST":
                 _Automation.set(bool(json.loads(body or b"{}").get("on")))
-            code = "200 OK" if route in ("/automation", "/status") else "404 Not Found"
+            if route == "/disconnect" and method == "POST":
+                # End the stream (and WDA) but keep the window: the launcher waits for /reconnect.
+                import os
+                log.info("disconnect requested from the viewer")
+                threading.Timer(0.3, lambda: os._exit(DISCONNECT_EXIT)).start()
+            code = "200 OK" if route in ("/automation", "/status", "/disconnect") else "404 Not Found"
             if route == "/status":
                 # iOS refuses to (re)start the stream during calls; upstream keeps retrying.
                 now = time.time()
@@ -286,6 +291,8 @@ async def _mount_ddi(rsd) -> None:
 
 
 RECONNECT_EXIT = 3  # app.py restarts the stream (and finds the phone again) on this code
+DISCONNECT_EXIT = 4  # the user disconnected: app.py waits for a reconnect request (helper /reconnect)
+RECONNECT_FLAG = "reconnect.request"   # file in the config dir that the helper drops on /reconnect
 
 
 def _exit_when_tunnel_dies() -> None:
@@ -344,6 +351,24 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
 
     ss.ScreenStreamServer.serve = serve
     _exit_when_tunnel_dies()
+
+    # Started during a call (camera/mic in use)? Upstream exits; instead serve anyway: the viewer
+    # shows the floating phone with "paused during your call" (and the basic feed with
+    # Automation), and the stream comes up lazily once iOS allows it again.
+    orig_eager = ss.ScreenStreamServer._eager_stream_start
+    in_use = getattr(ss, "is_media_in_use_error", None) or (lambda e: "9022" in str(e))
+
+    async def eager_stream_start(self):
+        global CALL_BLOCKED_AT
+        try:
+            await orig_eager(self)
+        except Exception as e:
+            if not in_use(e):
+                raise
+            CALL_BLOCKED_AT = time.time()
+            log.info("camera/microphone in use (call?) - serving anyway; HD starts once iOS allows it")
+
+    ss.ScreenStreamServer._eager_stream_start = eager_stream_start
     _patch_stall_watchdog(ss)
     upstream_html = ss.VIEWER_HTML
     ss.VIEWER_HTML = build_html(upstream_html, ext_port)
@@ -484,6 +509,11 @@ class Helper(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._reply(503, f"{type(e).__name__}: {e}")
             return self._reply(404, "not found")
+        if self.path == "/reconnect":
+            # The stream process is gone while disconnected, so the launcher watches for this file.
+            from . import device
+            (device.CONFIG_DIR / RECONNECT_FLAG).write_text("1")
+            return self._reply(200)
         if self.path == "/mjpeg":
             # Fallback feed quality (WDA applies the scaling factor squared: 75 -> ~56% size).
             try:

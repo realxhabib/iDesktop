@@ -223,7 +223,8 @@ BODY_INJECT = """
         try {
           const ax = await (await fetch('/accessibility')).json();
           const ts = (ax.settings || []).find(x => x.key === 'text_size');
-          store('ext-desk-text', ts ? ts.value : 'large');
+          // Already extra-small (e.g. left over)? Then "your size" is the iOS default, not that.
+          store('ext-desk-text', ts && ts.value !== 'extraSmall' ? ts.value : 'large');
         } catch (e) { store('ext-desk-text', 'large'); }
       }
       await setAx('text_size', 'extraSmall');
@@ -615,6 +616,7 @@ BODY_INJECT = """
   setInterval(async () => {
     try {
       const st = await (await fetch(CTL.replace('/automation', '/status'), {cache: 'no-store'})).json();
+      streamStalled = !!st.stalled;
       if (!overlayText) return;
       if (st.call_blocked) {
         overlayText.textContent = 'Paused by iOS during your call - HD comes back by itself after it ends.';
@@ -634,7 +636,10 @@ BODY_INJECT = """
   basic.id = 'ext-basic'; basic.alt = '';
   basic.style.cssText = 'position:fixed;display:none;object-fit:fill;pointer-events:none;z-index:15;background:#000';
   document.body.appendChild(basic);
-  let basicOn = false;
+  let basicOn = false, streamStalled = false;
+  // Reveal the basic feed only once its first picture has arrived (else it's just a black box).
+  basic.addEventListener('load', () => { if (basicOn) basic.style.visibility = 'visible'; });
+  basic.addEventListener('error', () => { basic.style.visibility = 'hidden'; });
   function placeBasic() {
     const r = canvas.getBoundingClientRect();
     Object.assign(basic.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
@@ -642,14 +647,15 @@ BODY_INJECT = """
   }
   setInterval(() => {
     const quiet = Date.now() - lastDrawAt;
-    if (!basicOn && quiet > 4000 && auto.running && document.visibilityState === 'visible') {
+    // A still screen also sends no frames; only fall back when the server saw a real stall/call.
+    if (!basicOn && quiet > 3000 && streamStalled && auto.running && document.visibilityState === 'visible') {
       basicOn = true;
       fetch(EXT + '/mjpeg', {method: 'POST', body: '{}'}).catch(() => {});
       basic.src = MJPEG + '?t=' + Date.now();
-      basic.style.display = 'block';
+      basic.style.display = 'block'; basic.style.visibility = 'hidden';
       document.body.classList.add('ext-basic-on');
       toast('HD paused by iOS - showing the basic feed until it returns');
-    } else if (basicOn && (quiet < 1500 || !auto.running)) {
+    } else if (basicOn && (quiet < 1500 || !auto.running || !streamStalled)) {
       basicOn = false;
       basic.removeAttribute('src');               // closes the MJPEG connection
       basic.style.display = 'none';

@@ -172,7 +172,10 @@ async def _control_server(port: int) -> None:
             code = "200 OK" if route in ("/automation", "/status") else "404 Not Found"
             if route == "/status":
                 # iOS refuses to (re)start the stream during calls; upstream keeps retrying.
-                out = json.dumps({"call_blocked": time.time() - CALL_BLOCKED_AT < 45}).encode()
+                now = time.time()
+                out = json.dumps({"call_blocked": now - CALL_BLOCKED_AT < 45,
+                                  # recent real stall (keyframe didn't help) or call block
+                                  "stalled": now - max(STALLED_AT, CALL_BLOCKED_AT) < 45}).encode()
             else:
                 out = json.dumps(_Automation.state()).encode()
             writer.write(f"HTTP/1.1 {code}\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\n"
@@ -190,7 +193,8 @@ async def _control_server(port: int) -> None:
 
 CTL_PORT = 0   # set in patch_screen_stream; the viewer page gets it via build_html
 MJPEG_PORT = 0   # local relay to WDA's MJPEG feed (device port 9100)
-CALL_BLOCKED_AT = 0.0   # last time iOS refused the stream because of a call
+CALL_BLOCKED_AT = 0.0
+STALLED_AT = 0.0        # last time a keyframe request failed to revive the video   # last time iOS refused the stream because of a call
 
 
 async def _wda_relay(server, port: int, device_port: int = 8100) -> None:
@@ -319,6 +323,10 @@ def patch_screen_stream(ext_port: int, wda_bundle: str | None = None, wda_port: 
     # iOS hides the on-screen keyboard while a hardware keyboard (ours) is attached; the
     # keyboard's Eject key (Consumer 0xB8) toggles it back, as on Apple's Magic Keyboard.
     ss._NAMED_BUTTONS.setdefault("keyboard", (0x0C, 0xB8, 0.05))
+    # Keyboard brightness keys (Consumer 0x6F/0x70), which iOS obeys like a Magic Keyboard's. The
+    # backlight is applied after screen capture, so the mirror stays bright while the phone dims.
+    ss._NAMED_BUTTONS.setdefault("brightness-up", (0x0C, 0x6F, 0.05))
+    ss._NAMED_BUTTONS.setdefault("brightness-down", (0x0C, 0x70, 0.05))
     # Upstream refuses /audio.bin off macOS because it assumes AudioToolbox; FFmpeg covers it here.
     ss.ScreenStreamServer._missing_audio_deps = staticmethod(lambda: [])
     orig_serve = ss.ScreenStreamServer.serve
@@ -390,6 +398,8 @@ def _patch_stall_watchdog(ss) -> None:
                         log.info("stream was just idle (still screen); keyframe revived it - no restart")
                         self._consecutive_restarts = 0
                         return None
+            global STALLED_AT
+            STALLED_AT = time.time()   # a real stall, not just a still screen (see /status)
             log.warning("keyframe request didn't revive the stream; restarting it")
         return await orig(self, force)
 

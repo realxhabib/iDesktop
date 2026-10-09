@@ -55,18 +55,18 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
  body.ext-compact #ext-phone .hw:hover { filter:brightness(1.25) }
  body.ext-compact #ext-phone .hw:active { filter:brightness(.8) }
  #ext-camctl { position:absolute; border-radius:2px; background:linear-gradient(90deg,#4f4d49,#8f8c86 50%,#4f4d49) }
- body.ext-compact #ext-ctl { display:block; position:fixed; top:0; z-index:20; font:500 13px/1 -apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif }
+ body.ext-compact #ext-ctl { display:block; position:fixed; top:0; z-index:20; font:500 12.5px/1 -apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif }
  .ext-fab, .ext-pill { position:absolute; box-sizing:border-box; display:flex; align-items:center; gap:10px; cursor:pointer;
    color:#f2f2f7; background:linear-gradient(180deg,#2c2c31,#1c1c20); border:1px solid #3a3a40;
    box-shadow:inset 0 1px 0 #ffffff14; user-select:none; transition:background .12s, border-color .12s }
  .ext-fab:hover, .ext-pill:hover { background:linear-gradient(180deg,#3a3a41,#26262b); border-color:#4c4c54 }
  .ext-fab:active, .ext-pill:active { background:#18181b }
  .ext-fab { justify-content:center; border-radius:50% }
- .ext-pill { padding:0 14px 0 12px; border-radius:999px; white-space:nowrap }
+ .ext-pill { padding:0 12px 0 11px; gap:9px; border-radius:999px; white-space:nowrap }
  .ext-pill.on { border-color:#0a84ff; color:#fff }
  .ext-pill.needs-auto { opacity:.45 }
  .ext-pill.danger:hover { background:linear-gradient(180deg,#5a2224,#3d1618); border-color:#8a2c30 }
- .ext-fab svg, .ext-pill svg { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9;
+ .ext-fab svg, .ext-pill svg { width:15px; height:15px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9;
    stroke-linecap:round; stroke-linejoin:round; opacity:.92 }
  .ext-pill:not(.show) { display:none }
  body.ext-compact #ext-to-compact, body.ext-compact #ext-more-btn { display:none }
@@ -907,7 +907,7 @@ BODY_INJECT = """
     if (sideways) { sw = L - 2 * E; sh = sw * natH / natW; } else { sh = L - 2 * E; sw = sh * natW / natH; }
     sw = Math.round(sw); sh = Math.round(sh);
     const pw = sw + 2 * E, ph = sh + 2 * E, sr = Math.round(Math.min(sw, sh) * 0.13), R = sr + E;
-    const PAD = 4, FAB = 42, PH = 36, PW = 204, CXR = pw + PAD + 14;   // controls column, relative
+    const PAD = 4, FAB = 42, PH = 32, PW = 196, CXR = pw + PAD + 14;   // controls column, relative
     if (full) {
       const maxX = innerWidth - (PAD + CXR + FAB + 4), maxY = innerHeight - ph - 2;
       posX = Math.max(0, Math.min(posX, maxX)); posY = Math.max(0, Math.min(posY, maxY));
@@ -933,20 +933,33 @@ BODY_INJECT = """
       Object.assign(el.style, {left: bx + 'px', top: by + 'px', width: '4px', height: bh + 'px'});
       shapes.push({x: X + bx, y: OY + by, w: 4, h: bh, r: 2});
     }
-    // Floating controls to the right of the phone.
-    const CX = X + CXR;
-    Object.assign(extCtl.style, {left: CX + 'px', top: OY + 'px'});
-    place(fab, 0, 0, FAB, FAB, FAB / 2);
-    shapes.push({x: CX, y: OY, w: FAB, h: FAB, r: FAB / 2});
-    let y = FAB + 12;
+    // Floating controls beside the phone: on the right if they fit on screen, else on the left;
+    // a second column when the list is taller than the space below the phone's top.
+    const GAPC = 8, STEP = PH + 4, Y0 = FAB + 10;
+    const bottomLimit = (full ? innerHeight : screen.availHeight) - OY - 6;
+    const placed = [];
+    let y = Y0, col = 0;
     for (const p of pills) {
       p.el.classList.toggle('show', menuOpen && !p.el.classList.contains('hidden-pill'));
       if (!p.el.classList.contains('show')) continue;
-      if (!menuOpen) continue;
-      if (p.gap) y += 10;
-      place(p.el, 0, y, PW, PH, PH / 2);
-      shapes.push({x: CX, y: OY + y, w: PW, h: PH, r: PH / 2});
-      y += PH + 6;
+      if (p.gap && y > Y0) y += 8;
+      if (y + PH > bottomLimit && y > Y0) { col++; y = Y0; }
+      placed.push([p, col, y]);
+      y += STEP;
+    }
+    const cols = placed.length ? col + 1 : 0;
+    const ctlW = Math.max(FAB, cols * PW + (cols - 1) * GAPC);
+    const rightX = X + CXR, leftX = X - 14 - ctlW;
+    const onLeft = full && rightX + ctlW > innerWidth - 4 && leftX >= 4;
+    const CX = onLeft ? leftX : rightX;
+    Object.assign(extCtl.style, {left: CX + 'px', top: OY + 'px'});
+    const fabX = onLeft ? ctlW - FAB : 0;
+    place(fab, fabX, 0, FAB, FAB, FAB / 2);
+    shapes.push({x: CX + fabX, y: OY, w: FAB, h: FAB, r: FAB / 2});
+    for (const [p, c, py] of placed) {
+      const px = onLeft ? ctlW - PW - c * (PW + GAPC) : c * (PW + GAPC);   // column 0 next to the phone
+      place(p.el, px, py, PW, PH, PH / 2);
+      shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: PH / 2});
     }
     // Big Screen: the whole (maximized) window is shown, black around the phone.
     if (bigFloat) shapes.splice(0, shapes.length, {x: 0, y: 0, w: innerWidth, h: innerHeight, r: 0});

@@ -1,0 +1,31 @@
+name: It works on my setup
+description: Tell us iDesktop works on your iPhone / PC, so others know it's supported
+labels: [compatibility]
+body:
+  - type: input
+    id: iphone
+    attributes:
+      label: iPhone model and iOS version
+    validations:
+      required: true
+  - type: input
+    id: pc
+    attributes:
+      label: Windows version and GPU
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works
+      options:
+        - label: HD mirror over USB
+        - label: HD mirror over Wi-Fi
+        - label: Sound
+        - label: Keyboard
+        - label: Clipboard sync
+        - label: WebDriverAgent extra (pinch, rotate, basic mode)
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes

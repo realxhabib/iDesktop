@@ -1,0 +1,4 @@
+pymobiledevice3==11.26.0
+av>=14
+pillow==12.3.0
+requests==2.34.2

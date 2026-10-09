@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# WebDriverAgent build output (extras/install-wda.ps1 makes it on demand)
+wda/
+*.ipa
+
+# Local logs / debugging
+*.log
+*.jsonl
+audio_dump.bin
+
+# Editors / OS
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+desktop.ini

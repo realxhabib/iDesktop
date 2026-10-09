@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: input
+    id: iphone
+    attributes:
+      label: iPhone model and iOS version
+      placeholder: iPhone 16 Pro Max, iOS 27.0.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options: [USB cable, Wi-Fi, Both]
+    validations:
+      required: true
+  - type: checkboxes
+    id: extras
+    attributes:
+      label: Setup
+      options:
+        - label: WebDriverAgent extra installed
+        - label: Apple Devices app (not iTunes)
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste or attach native.log and launcher.log from %APPDATA%\iDesktop\logs (redact your phone's name/UDID/IP if you like).
+      render: text

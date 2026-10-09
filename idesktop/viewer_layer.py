@@ -621,7 +621,7 @@ BODY_INJECT = """
   setInterval(async () => {
     try {
       const st = await (await fetch(CTL.replace('/automation', '/status'), {cache: 'no-store'})).json();
-      streamStalled = !!st.stalled;
+      streamStalled = !!st.stalled; callBlocked = !!st.call_blocked;
       if (!overlayText) return;
       if (st.call_blocked) {
         overlayText.textContent = 'Paused by iOS during your call - HD comes back by itself after it ends.';
@@ -641,10 +641,19 @@ BODY_INJECT = """
   basic.id = 'ext-basic'; basic.alt = '';
   basic.style.cssText = 'position:fixed;display:none;object-fit:fill;pointer-events:none;z-index:15;background:#000';
   document.body.appendChild(basic);
-  let basicOn = false, streamStalled = false;
-  // Reveal the basic feed only once its first picture has arrived (else it's just a black box).
-  basic.addEventListener('load', () => { if (basicOn) basic.style.visibility = 'visible'; });
-  basic.addEventListener('error', () => { basic.style.visibility = 'hidden'; });
+  let basicOn = false, streamStalled = false, callBlocked = false, basicSrcAt = 0;
+  // Reveal the basic feed only once its first picture has arrived (else it's just a black box);
+  // until then the "paused during your call" message stays visible.
+  const showBasic = (on) => { basic.style.visibility = on ? 'visible' : 'hidden';
+                              document.body.classList.toggle('ext-basic-on', on); };
+  basic.addEventListener('load', () => { if (basicOn) showBasic(true); });
+  basic.addEventListener('error', () => showBasic(false));
+  function startBasicFeed() {
+    // WebDriverAgent needs a few seconds after (re)starting before its feed answers.
+    basicSrcAt = Date.now();
+    fetch(EXT + '/mjpeg', {method: 'POST', body: '{}'}).catch(() => {});
+    basic.src = MJPEG + '?t=' + basicSrcAt;
+  }
   function placeBasic() {
     const r = canvas.getBoundingClientRect();
     Object.assign(basic.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
@@ -655,23 +664,31 @@ BODY_INJECT = """
     // A still screen also sends no frames; only fall back when the server saw a real stall/call.
     if (!basicOn && quiet > 3000 && streamStalled && auto.running && document.visibilityState === 'visible') {
       basicOn = true;
-      fetch(EXT + '/mjpeg', {method: 'POST', body: '{}'}).catch(() => {});
-      basic.src = MJPEG + '?t=' + Date.now();
-      basic.style.display = 'block'; basic.style.visibility = 'hidden';
-      document.body.classList.add('ext-basic-on');
+      basic.style.display = 'block'; showBasic(false);
+      startBasicFeed();
       toast('HD paused by iOS - showing the basic feed until it returns');
     } else if (basicOn && (quiet < 1500 || !auto.running || !streamStalled)) {
       basicOn = false;
       basic.removeAttribute('src');               // closes the MJPEG connection
-      basic.style.display = 'none';
-      document.body.classList.remove('ext-basic-on');
+      basic.style.display = 'none'; showBasic(false);
     }
     if (basicOn) {
       placeBasic();
       // Chromium doesn't reliably fire 'load' for an MJPEG stream; a decoded picture has a size.
-      if (basic.naturalWidth > 0) basic.style.visibility = 'visible';
+      if (basic.naturalWidth > 0) showBasic(true);
+      else if (Date.now() - basicSrcAt > 3000) startBasicFeed();   // not answering yet: retry
     }
     if (disconnected) placeDisc();   // follows the phone when it's dragged
+    const basicShowing = basicOn && basic.style.visibility === 'visible';
+    const showPaused = !disconnected && streamStalled && quiet > 3000 && !basicShowing;
+    if (showPaused) {
+      paused.textContent = callBlocked
+        ? 'Paused by iOS during your call. HD comes back by itself after it ends.' +
+          (auto.available && !auto.running ? ' Turn on Automation (in the controls) to see a basic picture meanwhile.' :
+           auto.running ? ' Loading the basic picture…' : '')
+        : 'Reconnecting to the screen…';
+    }
+    placeOver(paused, showPaused);
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
   const toggleKeyboard = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -704,6 +721,17 @@ BODY_INJECT = """
     'flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center';
   document.body.appendChild(disc);
   let disconnected = false;
+  // Our own "paused" screen: iOS blocks HD during calls; upstream's offline box only shows by its
+  // own rules (not once video has played), so the call message could stay invisible.
+  const paused = document.createElement('div');
+  paused.id = 'ext-paused';
+  paused.style.cssText = disc.style.cssText.replace('z-index:16', 'z-index:14') + ';padding:24px;box-sizing:border-box;line-height:1.45';
+  document.body.appendChild(paused);
+  function placeOver(el, show) {
+    const r = canvas.getBoundingClientRect();
+    Object.assign(el.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
+                             borderRadius: canvas.style.borderRadius || '0', display: show ? 'flex' : 'none'});
+  }
   function placeDisc() {
     const r = canvas.getBoundingClientRect();
     Object.assign(disc.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',

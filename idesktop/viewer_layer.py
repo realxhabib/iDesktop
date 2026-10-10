@@ -611,8 +611,7 @@ BODY_INJECT = """
      ['bell', 'Notifications', () => gestures['Notifications']()],
      ['search', 'Spotlight', () => gestures['Spotlight']()],
      ['siri', 'Siri', upClick('#bottom-row [data-btn="siri"]')],
-     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()],
-     ['pin', 'Passcode keypad', () => { setMenu(false); showPin(true); }]],
+     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()]],
     [['zin', 'Zoom in', () => pinch(0.5, 0.5, 1.8)],
      ['zout', 'Zoom out', () => pinch(0.5, 0.5, 0.5)],
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
@@ -772,7 +771,7 @@ BODY_INJECT = """
   // Automation" prompt, the lock screen), so the mirror shows the prompt but no keys. This keypad
   // types the digits as keyboard keys instead, which iOS accepts there, wherever its own keys are.
   // It opens by itself while Automation is starting but WebDriverAgent hasn't answered for a few
-  // seconds (that's the prompt), and from the controls.
+  // seconds (that's the prompt), and while the phone is locked (Automation reports that).
   const HID_DIGIT = {1: 0x1E, 2: 0x1F, 3: 0x20, 4: 0x21, 5: 0x22, 6: 0x23, 7: 0x24, 8: 0x25, 9: 0x26, 0: 0x27};
   const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A;
   const pin = document.createElement('div');
@@ -800,6 +799,7 @@ BODY_INJECT = """
     pinKeys.appendChild(k);
   }
   let pinShown = false, pinAuto = false, pinDismissedAt = 0, pinCount = 0, wdaOk = false, autoWaitSince = 0;
+  let phoneLocked = false, lockDismissed = false;
   async function hidKey(usage) {
     for (const usages of [[usage], []]) {
       await fetch('/key', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -815,7 +815,7 @@ BODY_INJECT = """
     const k = e.target.dataset && e.target.dataset.k;
     if (k === undefined) return;
     e.preventDefault(); e.stopPropagation();
-    if (k === 'close') { pinDismissedAt = Date.now(); showPin(false); return; }
+    if (k === 'close') { pinDismissedAt = Date.now(); if (phoneLocked) lockDismissed = true; showPin(false); return; }
     if (k === 'del') { pinCount = Math.max(0, pinCount - 1); pinDots.textContent = '•'.repeat(pinCount); await hidKey(HID_BACKSPACE); return; }
     if (k === 'ok') { await hidKey(HID_ENTER); showPin(false); return; }
     e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
@@ -831,7 +831,10 @@ BODY_INJECT = """
     else autoWaitSince = 0;
     if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && Date.now() - pinDismissedAt > 60000)
       showPin(true, true);
-    if (pinShown && pinAuto && wdaOk) showPin(false);       // Automation is up: prompt answered
+    // Locked (known while Automation runs): show it until unlocked; closing it lasts until the next lock.
+    if (!phoneLocked) lockDismissed = false;
+    if (phoneLocked && !pinShown && !lockDismissed) showPin(true, true);
+    if (pinShown && pinAuto && wdaOk && !phoneLocked) showPin(false);   // prompt answered / unlocked
     if (pinShown) placeOver(pin, true);
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
@@ -1167,7 +1170,7 @@ BODY_INJECT = """
     if (!autoRot) return;
     try {
       const o = await (await fetch(EXT + '/orientation', {cache: 'no-store'})).json();
-      wdaOk = !!o.ok;
+      wdaOk = !!o.ok; phoneLocked = !!(o.ok && o.locked);
       if (!o.ok) return;
       let deg = 0;
       if (o.landscape) deg = (o.z === 270 ? -90 : 90) * window.EXT_ROT_SIGN;  // verified on iPhone17,2: z=270 -> -90

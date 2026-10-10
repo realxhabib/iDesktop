@@ -631,7 +631,13 @@ class Orientation(threading.Thread):
                 root = w._s("GET", "/source?format=json", timeout=4) or {}
                 r = root.get("rect") or {}
                 z = int((w._s("GET", "/rotation", timeout=4) or {}).get("z", 0))
-                Orientation.state = {"landscape": r.get("width", 0) > r.get("height", 0), "z": z, "ok": True}
+                # Locked? The viewer then shows its passcode keypad (iOS hides its own from capture).
+                try:
+                    locked = bool(w._req("GET", "/wda/locked", timeout=4))
+                except Exception:
+                    locked = False
+                Orientation.state = {"landscape": r.get("width", 0) > r.get("height", 0), "z": z, "ok": True,
+                                     "locked": locked}
                 time.sleep(0.5)
             except Exception:
                 Orientation.state = dict(Orientation.state, ok=False)

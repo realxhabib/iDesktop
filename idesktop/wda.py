@@ -15,6 +15,12 @@ import requests
 Point = tuple[float, float]
 
 
+# Errors that mean "this session is unusable, make a new one": an expired session, or one bound
+# to an app that has since gone away (e.g. FaceTime after the call ends:
+# "stale element reference ... Application 'local.pid.0' is not running").
+_DEAD_SESSION = ("invalid session", "session does not exist", "stale element reference", "is not running")
+
+
 class WDAError(RuntimeError):
     pass
 
@@ -59,7 +65,7 @@ class WDA:
         try:
             return self._req(method, f"/session/{self.sid}{path}", body, timeout)
         except WDAError as e:
-            if "invalid session" not in str(e).lower() and "session does not exist" not in str(e).lower():
+            if not any(k in str(e).lower() for k in _DEAD_SESSION):
                 raise
             self.new_session()
             return self._req(method, f"/session/{self.sid}{path}", body, timeout)
@@ -76,15 +82,27 @@ class WDA:
 
     def new_session(self) -> str:
         with self._lock:
-            r = self.http.post(self.base + "/session",
-                               json={"capabilities": {"alwaysMatch": {}, "firstMatch": [{}]}},
-                               timeout=self.timeout)
-            data = r.json()
-            sid = data.get("sessionId") or (data.get("value") or {}).get("sessionId")
-            if not sid:
-                raise WDAError(f"could not create session: {data}")
-            self.sid = sid
-            return sid
+            for attempt in (1, 2):
+                r = self.http.post(self.base + "/session",
+                                   json={"capabilities": {"alwaysMatch": {}, "firstMatch": [{}]}},
+                                   timeout=self.timeout)
+                data = r.json()
+                sid = data.get("sessionId") or (data.get("value") or {}).get("sessionId")
+                if sid:
+                    self.sid = sid
+                    return sid
+                if attempt == 1 and any(k in str(data).lower() for k in _DEAD_SESSION):
+                    # WDA still holds a session bound to an app that's gone (FaceTime after the
+                    # call): end it, then try again.
+                    try:
+                        old = self.http.get(self.base + "/status", timeout=self.timeout).json().get("sessionId")
+                        if old:
+                            self.http.delete(f"{self.base}/session/{old}", timeout=self.timeout)
+                    except Exception:
+                        pass
+                    continue
+                break
+            raise WDAError(f"could not create session: {data}")
 
     def configure_stream(self, fps: int = 30, scale: int = 50, quality: int = 50) -> None:
         self._s("POST", "/appium/settings", {"settings": {

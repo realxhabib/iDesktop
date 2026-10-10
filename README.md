@@ -97,7 +97,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | Button | What it does |
 |---|---|
 | **Home** | Goes to the home screen. Same as middle-clicking the screen, or Ctrl+H. |
-| **App Switcher** | Shows your recent apps (swipe up and hold). |
+| **App Switcher** | Shows your recent apps. *Needs Automation* (iOS ignores edge swipes from the mirror's touch input). |
 | **Back** | Swipes in from the left edge, which is "back" in most apps. |
 | **Control Center** | Swipes down from the top-right corner. |
 | **Notifications** | Swipes down from the top-left corner. |
@@ -107,8 +107,8 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Zoom in / Zoom out** | A two-finger pinch at the centre of the screen. Ctrl + mouse wheel pinches where the mouse is. *Needs Automation.* |
 | **Screenshot** | Saves the phone's screen to Downloads at full resolution (Ctrl+P). |
 | **Desktop Mode** | Switches the phone to extra-small text, so apps fit more on screen, a bit like an iPad. Click again to restore your text size. |
-| **PC sound: on / off** | Plays (or stops playing) the phone's sound through this PC. |
-| **Sound on PC only** | Turns the phone's volume down to its lowest step, so the PC plays at full volume while the phone stays almost silent. *Needs Automation.* |
+| **PC sound: on / off** | Plays (or stops playing) the phone's sound through this PC. Turning it on also drops the phone's volume to its lowest step. |
+| **Sound on PC only** | Turns the phone's volume down to its lowest step, so the PC plays at full volume while the phone stays almost silent. |
 | **Dim phone** | Turns the phone's own screen down to minimum brightness. The mirror on your PC stays fully bright, so you can use the phone from the PC while it sits there almost dark. Click again (*Undim phone*) to bring it back. For near-black, also turn on Settings > Accessibility > Display & Text Size > *Reduce White Point*; you can put it on a triple-click with Accessibility Shortcut. |
 | **Automation: on / off** | Turns the [WebDriverAgent](#optional-extra-webdriveragent) helper on or off (see below). |
 | **Bigger / Smaller** | Resizes the phone (Ctrl+↑ / Ctrl+↓). |
@@ -128,7 +128,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | Dim phone, Desktop Mode, screenshots, wireless | ✅ | ✅ |
 | Auto-rotate for landscape apps | – | ✅ |
 | Pinch zoom (Zoom in/out, Ctrl + wheel) | – | ✅ |
-| Sound on PC only | – | ✅ |
+| App Switcher | – | ✅ |
 | Keep using the phone during calls ([Lite mode](#lite-mode)) | "Paused during your call" message | ✅ |
 | "Automation Running" notice on the phone | none | shown |
 
@@ -136,16 +136,16 @@ The buttons that need it look dimmed in the controls while it's off. In detail, 
 
 - **Auto-rotate:** the mirror turns sideways when an app goes landscape.
 - **Pinch zoom.**
-- **Sound on PC only.**
+- **App Switcher:** iOS ignores edge swipes from the mirror's own touch input, but not Automation's.
 - **[Lite mode](#lite-mode) during calls:** iOS stops sending the HD video while a call or the camera is active; iDesktop switches to Automation's own screen feed so you can keep using the phone until HD returns.
 
-While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch, *Sound on PC only* and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
+While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch, the App Switcher and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
 
 If you haven't installed the WebDriverAgent extra, the Automation button doesn't appear at all.
 
 ### Passcode keypad
 
-iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone is locked. Its keys type the digits on the phone. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
+iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; after you enter a code it steps aside while iOS checks it. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
 
 ### Lite mode
 
@@ -153,7 +153,7 @@ During a phone or FaceTime call (or whenever an app is using the camera or micro
 
 ### Sound
 
-Sound comes through the PC automatically, from any app except Apple Music, whose protected audio iOS won't share. The phone keeps playing too, because iOS has no "PC only" switch. **Controls > Sound on PC only** turns the phone's volume down to its lowest step, which keeps the PC copy at full volume. Volume 0 would mute both.
+Sound comes through the PC automatically, from any app except Apple Music, whose protected audio iOS won't share. The phone keeps playing too, because iOS has no "PC only" switch. Turning **PC sound** on (or **Controls > Sound on PC only**) turns the phone's volume down to its lowest step, which keeps the PC copy at full volume. Volume 0 would mute both.
 
 ### Wireless
 
@@ -167,7 +167,7 @@ These features need Appium's [WebDriverAgent](https://github.com/appium/WebDrive
 - Pinch zoom
 - Auto-rotate for landscape apps
 - **[Lite mode](#lite-mode)**, which keeps working during phone and FaceTime calls (iOS pauses the HD mirror while the camera or microphone is in use)
-- *Sound on PC only*
+- App Switcher
 
 To set it up:
 

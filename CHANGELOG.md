@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- App Switcher works again: it now goes through Automation (iOS ignores edge swipes from the HID touch input).
+- Turning PC sound on drops the phone's volume to its lowest step; volume uses the phone's own keys, no Automation needed.
+- Passcode keypad waits until the phone has stayed locked for a moment, and doesn't pop back up while a code is being checked or just after unlocking.
+- Automation's helper threads share one WebDriverAgent session instead of knocking each other's out.
+
 ## 0.1.0 (first public release)
 
 - HD mirror (iOS 27+): the iPhone's own HEVC stream at up to 60 fps, drawn sharp at window resolution.

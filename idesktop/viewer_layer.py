@@ -174,7 +174,13 @@ BODY_INJECT = """
     await touch('release', x1, y1);
   }
   const gestures = {
-    'App Switcher':   () => drag(32768, 65400, 32768, 40000, 320, 650),
+    // iOS ignores edge swipes from the HID digitizer (Home / App Switcher), so this goes through
+    // Automation (WebDriverAgent), whose synthesized touches do reach it.
+    'App Switcher':   async () => {
+      try { const r = await fetch(EXT + '/app-switcher', {method: 'POST', body: '{}'}); if (r.ok) return; } catch (e) {}
+      toast(auto.available ? 'App Switcher needs Automation - turn it on in the controls'
+                           : 'App Switcher needs the optional WebDriverAgent extra (see the README)');
+    },
     'Control Center': () => drag(60000, 250, 60000, 34000, 260),
     'Notifications':  () => drag(16000, 250, 16000, 40000, 260),
     'Spotlight':      () => drag(32768, 22000, 32768, 40000, 220),
@@ -643,13 +649,9 @@ BODY_INJECT = """
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
      ['desk', () => deskOn ? 'Exit Desktop Mode' : 'Desktop Mode', () => setDesktop(!deskOn)]],
     [['sound', () => soundOn() ? 'PC sound: on' : 'PC sound: off',
-      () => { soundBtnUp?.click(); setTimeout(refreshLabels, 400); }],
-     ['pc', 'Sound on PC only', async () => {
-       toast('Setting the phone volume to 1…');
-       try { const r = await fetch(EXT + '/volume', {method: 'POST', body: '{}'});
-             toast(r.ok ? 'Phone volume is 1 - the sound plays on the PC' : 'Could not set the volume'); }
-       catch (e) { toast('Helper not running'); }
-     }],
+      () => { const was = soundOn(); soundBtnUp?.click();
+              setTimeout(() => { refreshLabels(); if (!was && soundOn()) phoneVolumeLow(); }, 400); }],
+     ['pc', 'Sound on PC only', () => phoneVolumeLow()],
      ['dim', () => dimmed ? 'Undim phone' : 'Dim phone', () => toggleDim()],
      ['auto', () => auto.wanted ? 'Automation: on' : 'Automation: off', () => setAutomation(!auto.wanted)]],
     [['plus', 'Bigger', () => resizeL(1.1)],
@@ -825,7 +827,7 @@ BODY_INJECT = """
     pinKeys.appendChild(k);
   }
   let pinShown = false, pinAuto = false, pinDismissedAt = 0, pinCount = 0, wdaOk = false, autoWaitSince = 0;
-  let phoneLocked = false, lockDismissed = false;
+  let phoneLocked = false, lockDismissed = false, lockedSince = 0, typedAt = 0, holdUntil = 0;
   async function hidKey(usage) {
     for (const usages of [[usage], []]) {
       await fetch('/key', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -843,9 +845,11 @@ BODY_INJECT = """
     e.preventDefault(); e.stopPropagation();
     if (k === 'close') { pinDismissedAt = Date.now(); if (phoneLocked) lockDismissed = true; showPin(false); return; }
     if (k === 'del') { pinCount = Math.max(0, pinCount - 1); pinDots.textContent = '•'.repeat(pinCount); await hidKey(HID_BACKSPACE); return; }
-    if (k === 'ok') { await hidKey(HID_ENTER); showPin(false); return; }
+    // After a code goes in, give iOS time to check it (and our lock poll time to catch up) before
+    // the keypad may open again - otherwise it pops back up over a phone that's unlocking.
+    if (k === 'ok') { holdUntil = Date.now() + 6000; await hidKey(HID_ENTER); showPin(false); return; }
     e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
-    pinCount++; pinDots.textContent = '•'.repeat(pinCount);
+    pinCount++; pinDots.textContent = '•'.repeat(pinCount); typedAt = Date.now();
     await hidKey(HID_DIGIT[k]);
   });
   { const prev = window.__extPlaceOverlays;
@@ -855,11 +859,17 @@ BODY_INJECT = """
     // waiting for the passcode to "Enable UI Automation".
     if (auto.wanted && auto.running && !wdaOk) autoWaitSince = autoWaitSince || Date.now();
     else autoWaitSince = 0;
-    if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && Date.now() - pinDismissedAt > 60000)
+    if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && Date.now() - pinDismissedAt > 60000 &&
+        Date.now() > holdUntil)
       showPin(true, true);
-    // Locked (known while Automation runs): show it until unlocked; closing it lasts until the next lock.
-    if (!phoneLocked) lockDismissed = false;
-    if (phoneLocked && !pinShown && !lockDismissed) showPin(true, true);
+    // Locked (known while Automation runs): show it once the phone has stayed locked a moment, until
+    // it unlocks; closing it lasts until the next lock.
+    const now = Date.now();
+    if (!phoneLocked) { lockDismissed = false; lockedSince = 0; }
+    else lockedSince = lockedSince || now;
+    // iOS checks a full code by itself (no Done needed): a pause after 4+ digits means it went in.
+    if (pinShown && pinAuto && pinCount >= 4 && now - typedAt > 2000) { holdUntil = now + 6000; showPin(false); }
+    if (phoneLocked && !pinShown && !lockDismissed && now - lockedSince > 2000 && now > holdUntil) showPin(true, true);
     if (pinShown && pinAuto && wdaOk && !phoneLocked) showPin(false);   // prompt answered / unlocked
     if (pinShown) placeOver(pin, true);
   }, 1000);
@@ -878,7 +888,7 @@ BODY_INJECT = """
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); toggleKeyboard(); }
   }, true);
   // Buttons that only work while Automation (WebDriverAgent) runs: shown dimmed when it's off.
-  const NEEDS_AUTO = new Set(['zin', 'zout', 'pc']);
+  const NEEDS_AUTO = new Set(['zin', 'zout', 'apps']);
   // Dim the phone's own screen (keyboard brightness keys); the captured picture isn't affected.
   let dimmed = stored('ext-dim') === '1';
   async function press(name, n) {
@@ -887,6 +897,17 @@ BODY_INJECT = """
                               body: JSON.stringify({name})}).catch(() => {});
       await sleep(60);
     }
+  }
+  // Phone volume to its lowest audible step (the volume keys, all the way down then one up). The PC
+  // copy of the sound is taken before the phone's volume, so it stays loud - but 0 mutes it too.
+  // Done whenever PC sound is turned on, so the sound comes out of the PC instead of both.
+  let volBusy = false;
+  async function phoneVolumeLow() {
+    if (volBusy) return; volBusy = true;
+    try {
+      await press('volume-down', 17); await press('volume-up', 1);
+      toast('Phone volume set to its lowest step - the sound plays on the PC');
+    } finally { volBusy = false; }
   }
   async function toggleDim() {
     dimmed = !dimmed; store('ext-dim', dimmed ? '1' : '0'); refreshLabels();
@@ -939,7 +960,6 @@ BODY_INJECT = """
   // Hover help (also in the README's "Floating controls" table).
   const TIPS = {
     home: 'Go to the home screen (or middle-click the screen, Ctrl+H)',
-    apps: 'Show recent apps (swipe up and hold)',
     back: 'Swipe in from the left edge - "back" in most apps',
     cc: 'Swipe down from the top-right corner',
     bell: 'Swipe down from the top-left: notifications',
@@ -952,9 +972,11 @@ BODY_INJECT = """
     zout: 'Two-finger zoom out (or Ctrl + mouse wheel). Needs Automation',
     shot: 'Save a full-resolution screenshot to Downloads (Ctrl+P)',
     desk: 'Extra-small text on the phone: denser, iPad-like layouts. Click again to restore your text size',
-    sound: "Play the phone's sound on this PC (on/off)",
-    pc: 'Turn the phone volume down to its lowest step: the PC keeps full volume, the phone is nearly silent. Needs Automation',
-    auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and Lite mode during calls. ' +
+    sound: "Play the phone's sound on this PC (on/off). Turning it on also drops the phone's volume to its lowest step",
+    pc: 'Turn the phone volume down to its lowest step: the PC keeps full volume, the phone is nearly silent ' +
+        '(done automatically whenever PC sound is turned on)',
+    apps: 'Open the App Switcher (or drag the bar under the phone upward). Needs Automation',
+    auto: 'WebDriverAgent helper: App Switcher, auto-rotate, pinch zoom, and Lite mode during calls. ' +
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
     scroll: 'How far one mouse-wheel notch scrolls the phone: click to cycle Slowest / Slow / Normal / Fast / Fastest',

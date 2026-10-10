@@ -511,6 +511,8 @@ class Helper(BaseHTTPRequestHandler):
                 w = WDA("127.0.0.1", cls.wda_port)
                 w.new_session()
                 w.refresh_size()
+                # Orientation reads the root element only: keep page-source snapshots shallow.
+                w._s("POST", "/appium/settings", {"settings": {"snapshotMaxDepth": 1}})
                 cls._wda = w
             return cls._wda
 
@@ -571,6 +573,15 @@ class Helper(BaseHTTPRequestHandler):
             except Exception:
                 Helper._wda = None
                 return self._reply(503, "needs WebDriverAgent - an optional extra, see the README")
+        if self.path == "/app-switcher":
+            # Edge swipes from the HID digitizer never reach iOS's system gesture recognizer
+            # (home / App Switcher); XCTest's synthesized touches do.
+            try:
+                self.wda().app_switcher()
+                return self._reply(200)
+            except Exception:
+                Helper._wda = None
+                return self._reply(503, "needs Automation (WebDriverAgent)")
         if self.path != "/pinch":
             return self._reply(404, "not found")
         try:
@@ -620,14 +631,11 @@ class Orientation(threading.Thread):
 
     def run(self) -> None:
         import time
-        from .wda import WDA
-        w = None
         while True:
             try:
-                if w is None:
-                    w = WDA("127.0.0.1", self.wda_port, timeout=4)
-                    w.new_session()
-                    w._s("POST", "/appium/settings", {"settings": {"snapshotMaxDepth": 1}})
+                # Share the helper's WebDriverAgent session: WDA keeps one session, so a second
+                # client's new session kills the other's (App Switcher, pinch...) mid-request.
+                w = Helper.wda()
                 root = w._s("GET", "/source?format=json", timeout=4) or {}
                 r = root.get("rect") or {}
                 z = int((w._s("GET", "/rotation", timeout=4) or {}).get("z", 0))
@@ -641,7 +649,7 @@ class Orientation(threading.Thread):
                 time.sleep(0.5)
             except Exception:
                 Orientation.state = dict(Orientation.state, ok=False)
-                w = None
+                Helper._wda = None
                 time.sleep(2)
 
 

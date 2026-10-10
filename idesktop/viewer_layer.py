@@ -174,12 +174,12 @@ BODY_INJECT = """
     await touch('release', x1, y1);
   }
   const gestures = {
-    // iOS ignores edge swipes from the HID digitizer (Home / App Switcher), so this goes through
-    // Automation (WebDriverAgent), whose synthesized touches do reach it.
+    // iOS ignores edge swipes from the HID digitizer, but a double press of Home opens the App
+    // Switcher (as on Touch ID iPhones) - no Automation needed.
     'App Switcher':   async () => {
-      try { const r = await fetch(EXT + '/app-switcher', {method: 'POST', body: '{}'}); if (r.ok) return; } catch (e) {}
-      toast(auto.available ? 'App Switcher needs Automation - turn it on in the controls'
-                           : 'App Switcher needs the optional WebDriverAgent extra (see the README)');
+      const home = () => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                           body: JSON.stringify({name: 'home', state: 'press'})}).catch(() => {});
+      await home(); await sleep(60); await home();
     },
     'Control Center': () => drag(60000, 250, 60000, 34000, 260),
     'Notifications':  () => drag(16000, 250, 16000, 40000, 260),
@@ -578,10 +578,10 @@ BODY_INJECT = """
   const camCtl = document.createElement('div'); camCtl.id = 'ext-camctl';   // Camera Control (cosmetic)
   const extCtl = document.createElement('div'); extCtl.id = 'ext-ctl';
   extPhone.append(extBezel, camCtl); document.body.append(extPhone, extCtl);
-  // Home bar under the phone, like the iPhone's home indicator: click = Home,
-  // right-click or drag it upward = App Switcher.
+  // Home bar under the phone, like the iPhone's home indicator: click = Home; double-click,
+  // right-click or drag it upward = App Switcher (a double Home press).
   const homeBar = document.createElement('div');
-  homeBar.id = 'ext-homebar'; homeBar.title = 'Click: Home  ·  Drag up or right-click: App Switcher';
+  homeBar.id = 'ext-homebar'; homeBar.title = 'Click: Home  ·  Double-click, drag up or right-click: App Switcher';
   homeBar.innerHTML = '<span></span>';
   document.body.appendChild(homeBar);
   const HOMEBAR_H = 26, HOMEBAR_GAP = 8;
@@ -801,7 +801,7 @@ BODY_INJECT = """
   // It opens by itself while Automation is starting but WebDriverAgent hasn't answered for a few
   // seconds (that's the prompt), and while the phone is locked (Automation reports that).
   const HID_DIGIT = {1: 0x1E, 2: 0x1F, 3: 0x20, 4: 0x21, 5: 0x22, 6: 0x23, 7: 0x24, 8: 0x25, 9: 0x26, 0: 0x27};
-  const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A;
+  const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A, HID_SHIFT = 0xE1;
   const pin = document.createElement('div');
   pin.id = 'ext-pin';
   pin.style.cssText = 'position:fixed;display:none;z-index:17;background:rgba(12,12,14,.94);color:#fff;' +
@@ -828,11 +828,18 @@ BODY_INJECT = """
   }
   let pinShown = false, pinAuto = false, pinDismissedAt = 0, pinCount = 0, wdaOk = false, autoWaitSince = 0;
   let phoneLocked = false, lockDismissed = false, lockedSince = 0, typedAt = 0, holdUntil = 0;
-  async function hidKey(usage) {
-    for (const usages of [[usage], []]) {
-      await fetch('/key', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                           body: JSON.stringify({usages})}).catch(() => {});
-    }
+  // Keys go out strictly one after another: two quick clicks must not overlap (key A down, key B
+  // down, both up), which iOS can read as one key and the code comes out short.
+  let keyChain = Promise.resolve();
+  function hidKey(usage) {
+    keyChain = keyChain.then(async () => {
+      for (const usages of [[usage], []]) {
+        await fetch('/key', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({usages})}).catch(() => {});
+        await sleep(30);
+      }
+    });
+    return keyChain;
   }
   function showPin(on, auto = false) {
     pinShown = on; pinAuto = on && auto;
@@ -849,7 +856,11 @@ BODY_INJECT = """
     // the keypad may open again - otherwise it pops back up over a phone that's unlocking.
     if (k === 'ok') { holdUntil = Date.now() + 6000; await hidKey(HID_ENTER); showPin(false); return; }
     e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
+    // First digit of a code: tap Shift first, which wakes the lock screen's passcode entry -
+    // otherwise iOS can swallow the first digit bringing it up, and the code comes out wrong.
+    const fresh = pinCount === 0;
     pinCount++; pinDots.textContent = '•'.repeat(pinCount); typedAt = Date.now();
+    if (fresh) { hidKey(HID_SHIFT); keyChain = keyChain.then(() => sleep(350)); }
     await hidKey(HID_DIGIT[k]);
   });
   { const prev = window.__extPlaceOverlays;
@@ -868,7 +879,9 @@ BODY_INJECT = """
     if (!phoneLocked) { lockDismissed = false; lockedSince = 0; }
     else lockedSince = lockedSince || now;
     // iOS checks a full code by itself (no Done needed): a pause after 4+ digits means it went in.
-    if (pinShown && pinAuto && pinCount >= 4 && now - typedAt > 2000) { holdUntil = now + 6000; showPin(false); }
+    // A pause after a code: iOS has checked it (it submits a full code by itself). If the phone is
+    // still locked it was wrong - start the dots over for the next try.
+    if (pinShown && pinCount && now - typedAt > 2500) { pinCount = 0; pinDots.textContent = ''; }
     if (phoneLocked && !pinShown && !lockDismissed && now - lockedSince > 2000 && now > holdUntil) showPin(true, true);
     if (pinShown && pinAuto && wdaOk && !phoneLocked) showPin(false);   // prompt answered / unlocked
     if (pinShown) placeOver(pin, true);
@@ -885,7 +898,7 @@ BODY_INJECT = """
     if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); toggleKeyboard(); }
   }, true);
   // Buttons that only work while Automation (WebDriverAgent) runs: shown dimmed when it's off.
-  const NEEDS_AUTO = new Set(['zin', 'zout', 'apps']);
+  const NEEDS_AUTO = new Set(['zin', 'zout']);
   // Dim the phone's own screen (keyboard brightness keys); the captured picture isn't affected.
   let dimmed = stored('ext-dim') === '1';
   async function press(name, n) {
@@ -972,8 +985,8 @@ BODY_INJECT = """
     sound: "Play the phone's sound on this PC (on/off). Turning it on also drops the phone's volume to its lowest step",
     pc: 'Turn the phone volume down to its lowest step: the PC keeps full volume, the phone is nearly silent ' +
         '(done automatically whenever PC sound is turned on)',
-    apps: 'Open the App Switcher (or drag the bar under the phone upward). Needs Automation',
-    auto: 'WebDriverAgent helper: App Switcher, auto-rotate, pinch zoom, and Lite mode during calls. ' +
+    apps: 'Open the App Switcher (or double-click the bar under the phone)',
+    auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, and Lite mode during calls. ' +
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
     scroll: 'How far one mouse-wheel notch scrolls the phone: click to cycle Slowest / Slow / Normal / Fast / Fastest',

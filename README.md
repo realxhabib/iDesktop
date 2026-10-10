@@ -77,7 +77,7 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 |---|---|
 | Tap / swipe | Click / drag on the screen |
 | Scroll | Mouse wheel (Shift+wheel scrolls sideways) |
-| Home / App Switcher | The bar under the phone: click for Home; drag it up or right-click for the App Switcher |
+| Home / App Switcher | The bar under the phone: click for Home; double-click, drag it up or right-click for the App Switcher |
 | Long press | Right-click (hold it as long as you like; right-drag to move icons) |
 | Home | Middle-click the screen, or Ctrl+H |
 | Move the phone | Drag its rim |
@@ -97,7 +97,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | Button | What it does |
 |---|---|
 | **Home** | Goes to the home screen. Same as middle-clicking the screen, or Ctrl+H. |
-| **App Switcher** | Shows your recent apps. *Needs Automation* (iOS ignores edge swipes from the mirror's touch input). |
+| **App Switcher** | Shows your recent apps (a double press of Home). |
 | **Back** | Swipes in from the left edge, which is "back" in most apps. |
 | **Control Center** | Swipes down from the top-right corner. |
 | **Notifications** | Swipes down from the top-left corner. |
@@ -128,7 +128,6 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | Dim phone, Desktop Mode, screenshots, wireless | ✅ | ✅ |
 | Auto-rotate for landscape apps | – | ✅ |
 | Pinch zoom (Zoom in/out, Ctrl + wheel) | – | ✅ |
-| App Switcher | – | ✅ |
 | Keep using the phone during calls ([Lite mode](#lite-mode)) | "Paused during your call" message | ✅ |
 | "Automation Running" notice on the phone | none | shown |
 
@@ -136,16 +135,15 @@ The buttons that need it look dimmed in the controls while it's off. In detail, 
 
 - **Auto-rotate:** the mirror turns sideways when an app goes landscape.
 - **Pinch zoom.**
-- **App Switcher:** iOS ignores edge swipes from the mirror's own touch input, but not Automation's.
 - **[Lite mode](#lite-mode) during calls:** iOS stops sending the HD video while a call or the camera is active; iDesktop switches to Automation's own screen feed so you can keep using the phone until HD returns.
 
-While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch, the App Switcher and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
+While Automation is on, iOS shows an **"Automation Running"** notice on the phone. Switch it off in the controls, or hold both volume buttons on the phone, and the notice goes away. Auto-rotate, pinch and the call backup pause until you switch it back on. Everything else keeps working: the HD mirror, touch, scrolling, keyboard and sound. iDesktop remembers your choice.
 
 If you haven't installed the WebDriverAgent extra, the Automation button doesn't appear at all.
 
 ### Passcode keypad
 
-iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; after you enter a code it steps aside while iOS checks it. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
+iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; click them at any pace, iOS checks the code once it's complete. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
 
 ### Lite mode
 
@@ -167,7 +165,6 @@ These features need Appium's [WebDriverAgent](https://github.com/appium/WebDrive
 - Pinch zoom
 - Auto-rotate for landscape apps
 - **[Lite mode](#lite-mode)**, which keeps working during phone and FaceTime calls (iOS pauses the HD mirror while the camera or microphone is in use)
-- App Switcher
 
 To set it up:
 

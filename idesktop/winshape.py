@@ -181,7 +181,7 @@ def _apply(spec: dict) -> dict:
             x0, y0 = ox + int(round(s["x"] * d)), oy + int(round(s["y"] * d))
             x1, y1 = x0 + int(round(s["w"] * d)), y0 + int(round(s["h"] * d))
             r = max(0, int(round(s.get("r", 0) * d * 2)))
-            part = gdi32.CreateRoundRectRgn(x0, y0, x1 + 1, y1 + 1, r, r)
+            part = gdi32.CreateRoundRectRgn(x0, y0, x1, y1, r, r)   # right/bottom are exclusive: exact size
             gdi32.CombineRgn(rgn, rgn, part, RGN_OR)
             gdi32.DeleteObject(part)
         user32.SetWindowRgn(hwnd, rgn, True)  # the system owns rgn from here

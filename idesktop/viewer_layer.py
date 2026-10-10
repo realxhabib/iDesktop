@@ -61,8 +61,8 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
    box-shadow:inset 0 1px 0 #ffffff14; user-select:none; transition:background .12s, border-color .12s }
  .ext-fab:hover, .ext-pill:hover { background:linear-gradient(180deg,#3a3a41,#26262b); border-color:#4c4c54 }
  .ext-fab:active, .ext-pill:active { background:#18181b }
- .ext-fab { justify-content:center; border-radius:50% }
- .ext-pill { padding:0 12px 0 11px; gap:9px; border-radius:999px; white-space:nowrap }
+ .ext-fab { justify-content:center; border-radius:12px }
+ .ext-pill { padding:0 12px 0 11px; gap:9px; border-radius:9px; white-space:nowrap }
  .ext-pill.on { border-color:#0a84ff; color:#fff }
  .ext-pill.needs-auto { opacity:.45 }
  .ext-pill.danger:hover { background:linear-gradient(180deg,#5a2224,#3d1618); border-color:#8a2c30 }
@@ -335,14 +335,17 @@ BODY_INJECT = """
   // WHEEL_GAIN: finger travel (HID units, 0..65535 = full screen) per wheel pixel; one notch is ~100 px.
   // The finger rests WHEEL_REST_MS before lifting, which keeps iOS from adding much momentum.
   // localStorage 'ext-wheel' scales the speed (e.g. 1.5 = faster).
-  const WHEEL_GAIN = 22 * (parseFloat(stored('ext-wheel')) || 1), WHEEL_IDLE_MS = 90, WHEEL_REST_MS = 70;
+  const WHEEL_SPEEDS = [['Slowest', 0.4], ['Slow', 0.65], ['Normal', 1], ['Fast', 1.5], ['Fastest', 2.2]];
+  let wheelSpeed = parseFloat(stored('ext-wheel')) || 1;
+  const WHEEL_BASE = 22, WHEEL_IDLE_MS = 90, WHEEL_REST_MS = 70;
   const LO = 4000, HI = 61500;
   let wheelDown = false, wheelResting = false, wx = 0, wy = 0, wheelIdle = 0;
   function wheelScroll(e, p) {
     if (activePointer !== null) return;          // a real mouse drag is in progress
     const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;   // lines / pages -> px
     let dx = (e.shiftKey ? e.deltaY : e.deltaX) * unit, dy = (e.shiftKey ? 0 : e.deltaY) * unit;
-    dx = -dx * WHEEL_GAIN; dy = -dy * WHEEL_GAIN;
+    const gain = WHEEL_BASE * wheelSpeed;
+    dx = -dx * gain; dy = -dy * gain;
     if (!wheelDown && wheelResting) { wheelResting = false; wheelDown = true; }   // resumed mid-rest: same finger
     if (!wheelDown) {
       // Start where the mouse is, but leave room to travel in the scroll direction.
@@ -587,6 +590,7 @@ BODY_INJECT = """
     auto: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M2.5 12.5v3M21.5 12.5v3"/><circle cx="12" cy="4" r="1"/>',
     dim: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
     unplug: '<path d="M7 7l10 10M9 4v4M15 4v4M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+    scroll: '<rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v4"/>',
     refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
     kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
@@ -620,6 +624,10 @@ BODY_INJECT = """
      ['auto', () => auto.wanted ? 'Automation: on' : 'Automation: off', () => setAutomation(!auto.wanted)]],
     [['plus', 'Bigger', () => resizeL(1.1)],
      ['minus', 'Smaller', () => resizeL(1 / 1.1)],
+     ['scroll', () => 'Scroll speed: ' + (WHEEL_SPEEDS.find(w => w[1] === wheelSpeed) || ['Custom'])[0], () => {
+       const i = WHEEL_SPEEDS.findIndex(w => w[1] === wheelSpeed);
+       wheelSpeed = WHEEL_SPEEDS[(i + 1) % WHEEL_SPEEDS.length][1]; store('ext-wheel', String(wheelSpeed));
+     }],
      ['refresh', 'Refresh', () => location.reload()],
      ['layout', 'Classic window', () => { store('ext-compact', '0'); setMenu(false); window.fitCanvasToViewport(); }],
      ['unplug', 'Disconnect', () => disconnect()],
@@ -848,6 +856,7 @@ BODY_INJECT = """
     auto: 'WebDriverAgent helper: auto-rotate, pinch zoom, "Sound on PC only", and Lite mode during calls. ' +
           'While on, iOS shows "Automation Running" (holding both volume buttons on the phone also turns it off)',
     plus: 'Make the phone bigger (Ctrl+Up)', minus: 'Make the phone smaller (Ctrl+Down)',
+    scroll: 'How far one mouse-wheel notch scrolls the phone: click to cycle Slowest / Slow / Normal / Fast / Fastest',
     refresh: 'Reload the viewer and reconnect the picture - if it ever looks frozen (also F5)',
     layout: 'Switch to the normal window with toolbar, accessibility and clipboard panels',
     dim: 'Turn the screen of the phone itself down to minimum brightness - the mirror here stays bright. ' +
@@ -998,12 +1007,14 @@ BODY_INJECT = """
     const CX = onLeft ? leftX : rightX;
     Object.assign(extCtl.style, {left: CX + 'px', top: OY + 'px'});
     const fabX = onLeft ? ctlW - FAB : 0;
-    place(fab, fabX, 0, FAB, FAB, FAB / 2);
-    shapes.push({x: CX + fabX, y: OY, w: FAB, h: FAB, r: FAB / 2});
+    // Small corner radii on purpose: the window region that cuts these out isn't anti-aliased,
+    // so large round ends show stair steps; 9-12 px corners look crisp.
+    place(fab, fabX, 0, FAB, FAB, 12);
+    shapes.push({x: CX + fabX, y: OY, w: FAB, h: FAB, r: 12});
     for (const [p, c, py] of placed) {
       const px = onLeft ? ctlW - PW - c * (PW + GAPC) : c * (PW + GAPC);   // column 0 next to the phone
-      place(p.el, px, py, PW, PH, PH / 2);
-      shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: PH / 2});
+      place(p.el, px, py, PW, PH, 9);
+      shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: 9});
     }
     try { window.__extPlaceOverlays?.(); } catch (e) {}   // overlays follow the phone (drag)
     // Big Screen: the whole (maximized) window is shown, black around the phone.

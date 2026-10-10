@@ -111,6 +111,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Dim phone** | Turns the phone's own screen down to minimum brightness. The mirror on your PC stays fully bright, so you can use the phone from the PC while it sits there almost dark. Click again (*Undim phone*) to bring it back. For near-black, also turn on Settings > Accessibility > Display & Text Size > *Reduce White Point*; you can put it on a triple-click with Accessibility Shortcut. |
 | **Automation: on / off** | Turns the [WebDriverAgent](#optional-extra-webdriveragent) helper on or off (see below). |
 | **Bigger / Smaller** | Resizes the phone (Ctrl+↑ / Ctrl+↓). |
+| **Scroll speed** | How far one mouse-wheel notch scrolls: click to cycle Slowest, Slow, Normal, Fast, Fastest (remembered). |
 | **Refresh** | Reloads the viewer and reconnects the picture, if it ever looks frozen while taps still work (same as F5). iDesktop also does this by itself after reconnecting. |
 | **Classic window** | Switches to a normal window with a toolbar, accessibility settings, a clipboard panel and Big Screen. |
 | **Disconnect** | Stops mirroring and releases the phone (its "Automation Running" notice goes away too), but keeps the floating phone on your desktop with a **Reconnect** button. |

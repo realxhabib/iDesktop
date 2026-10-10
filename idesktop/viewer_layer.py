@@ -675,6 +675,14 @@ BODY_INJECT = """
     fetch(EXT + '/mjpeg', {method: 'POST', body: '{}'}).catch(() => {});
     basic.src = MJPEG + '?t=' + basicSrcAt;
   }
+  // Re-place every overlay on the phone's screen (Lite mode picture, paused, disconnected).
+  // Called by the floating layout on every change, so they follow a drag frame by frame.
+  let pausedShown = false;
+  window.__extPlaceOverlays = () => {
+    if (basicOn) placeBasic();
+    if (disconnected) placeDisc();
+    if (pausedShown) placeOver(paused, true);
+  };
   function placeBasic() {
     const r = canvas.getBoundingClientRect();
     Object.assign(basic.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
@@ -709,6 +717,7 @@ BODY_INJECT = """
            auto.running ? ' Switching to Lite mode…' : '')
         : 'Reconnecting to the screen…';
     }
+    pausedShown = showPaused;
     placeOver(paused, showPaused);
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
@@ -961,6 +970,7 @@ BODY_INJECT = """
       place(p.el, px, py, PW, PH, PH / 2);
       shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: PH / 2});
     }
+    try { window.__extPlaceOverlays?.(); } catch (e) {}   // overlays follow the phone (drag)
     // Big Screen: the whole (maximized) window is shown, black around the phone.
     if (bigFloat) shapes.splice(0, shapes.length, {x: 0, y: 0, w: innerWidth, h: innerHeight, r: 0});
     postLayout({dpr, maximize: true, shapes});

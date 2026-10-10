@@ -123,6 +123,41 @@ BODY_INJECT = """
     return origPost(path, payload);
   };
   const touch = (type, x, y) => sendTouch({type, x: Math.round(x), y: Math.round(y)});
+  // Right button = a long press (held as long as the button is, at least LONG_MS, and draggable:
+  // context menus, Haptic Touch, moving icons). Middle button = Home (upstream used right-click).
+  const LONG_MS = 600;
+  let rDown = null;
+  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({name: 'home', state: 'press'})}).catch(() => {});
+      return;
+    }
+    if (e.button !== 2) return;
+    e.preventDefault();
+    canvas.focus({preventScroll: true});
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    const p = touchCoords(e);
+    rDown = {id: e.pointerId, at: Date.now(), x: p.x, y: p.y};
+    touch('contact', p.x, p.y);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!rDown || e.pointerId !== rDown.id) return;
+    const p = touchCoords(e);
+    rDown.x = p.x; rDown.y = p.y;
+    touch('contact', p.x, p.y);
+  });
+  const rUp = async (e) => {
+    if (!rDown || e.pointerId !== rDown.id) return;
+    const r = rDown; rDown = null;
+    const left = LONG_MS - (Date.now() - r.at);
+    if (left > 0) await sleep(left);              // a quick right-click still counts as a long press
+    touch('release', r.x, r.y);
+  };
+  canvas.addEventListener('pointerup', rUp);
+  canvas.addEventListener('pointercancel', rUp);
   // Drag in HID space (0..65535) with n samples over ms, optional hold before lifting.
   async function drag(x0, y0, x1, y1, ms = 220, hold = 0, n = 12) {
     await touch('contact', x0, y0);
@@ -795,7 +830,7 @@ BODY_INJECT = """
   const pills = [];
   // Hover help (also in the README's "Floating controls" table).
   const TIPS = {
-    home: 'Go to the home screen (or right-click the screen, Ctrl+H)',
+    home: 'Go to the home screen (or middle-click the screen, Ctrl+H)',
     apps: 'Show recent apps (swipe up and hold)',
     back: 'Swipe in from the left edge - "back" in most apps',
     cc: 'Swipe down from the top-right corner',

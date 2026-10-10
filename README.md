@@ -77,7 +77,8 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 |---|---|
 | Tap / swipe | Click / drag on the screen |
 | Scroll | Mouse wheel (Shift+wheel scrolls sideways) |
-| Home | Right-click the screen, or Ctrl+H |
+| Long press | Right-click (hold it as long as you like; right-drag to move icons) |
+| Home | Middle-click the screen, or Ctrl+H |
 | Move the phone | Drag its rim |
 | Controls | The round **⋯** button next to the phone, Ctrl+M, or right-click the rim |
 | Bigger / smaller | Ctrl+↑ / Ctrl+↓ |
@@ -94,7 +95,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 
 | Button | What it does |
 |---|---|
-| **Home** | Goes to the home screen. Same as right-clicking the screen, or Ctrl+H. |
+| **Home** | Goes to the home screen. Same as middle-clicking the screen, or Ctrl+H. |
 | **App Switcher** | Shows your recent apps (swipe up and hold). |
 | **Back** | Swipes in from the left edge, which is "back" in most apps. |
 | **Control Center** | Swipes down from the top-right corner. |

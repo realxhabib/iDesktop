@@ -87,7 +87,7 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 | Desktop Mode | Controls > Desktop Mode: extra-small, iPad-like text (click again to restore your text size) |
 | Screenshot | Ctrl+P, saved to Downloads at full resolution |
 | Keyboard | Just type. Alt = ⌘, Ctrl+L = lock, Ctrl+[ / ] = volume, Ctrl+S = Siri |
-| On-screen keyboard | Ctrl+K or Controls > On-screen keyboard. iOS hides it while a hardware keyboard (iDesktop) is attached; this toggles it back |
+| On-screen keyboard | Ctrl+K or Controls > Show / hide keyboard. iOS hides it while a hardware keyboard (iDesktop) is attached; this toggles it back |
 | Classic window | Controls > Classic window (toolbar, accessibility and clipboard panels) |
 
 ### Floating controls
@@ -103,7 +103,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Notifications** | Swipes down from the top-left corner. |
 | **Spotlight** | Opens search on the home screen. |
 | **Siri** | Holds the side button to start Siri (Ctrl+S). |
-| **On-screen keyboard: on / off** | Shows or hides the iPhone's own keyboard in text fields (Ctrl+K); the button lights up while it's on. iOS hides it while your PC keyboard is connected, which iDesktop always is, so use this if you want it back. |
+| **Show / hide keyboard** | Shows or hides the iPhone's own keyboard in text fields (Ctrl+K). iOS doesn't tell iDesktop which way it is, so the button just flips it. iOS hides it while your PC keyboard is connected, which iDesktop always is, so use this if you want it back. |
 | **Zoom in / Zoom out** | A two-finger pinch at the centre of the screen. Ctrl + mouse wheel pinches where the mouse is. *Needs Automation.* |
 | **Screenshot** | Saves the phone's screen to Downloads at full resolution (Ctrl+P). |
 | **Desktop Mode** | Switches the phone to extra-small text, so apps fit more on screen, a bit like an iPad. Click again to restore your text size. |

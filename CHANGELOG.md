@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The keyboard button is a plain Show / hide toggle: iOS doesn't report the state, and the guessed on/off label could be backwards.
 - App Switcher works again: it now goes through Automation (iOS ignores edge swipes from the HID touch input).
 - Turning PC sound on drops the phone's volume to its lowest step; volume uses the phone's own keys, no Automation needed.
 - Passcode keypad waits until the phone has stayed locked for a moment, and doesn't pop back up while a code is being checked or just after unlocking.

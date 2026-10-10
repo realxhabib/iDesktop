@@ -643,7 +643,7 @@ BODY_INJECT = """
      ['bell', 'Notifications', () => gestures['Notifications']()],
      ['search', 'Spotlight', () => gestures['Spotlight']()],
      ['siri', 'Siri', upClick('#bottom-row [data-btn="siri"]')],
-     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()]],
+     ['kbd', 'Show / hide keyboard', () => toggleKeyboard()]],
     [['zin', 'Zoom in', () => pinch(0.5, 0.5, 1.8)],
      ['zout', 'Zoom out', () => pinch(0.5, 0.5, 0.5)],
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
@@ -874,13 +874,10 @@ BODY_INJECT = """
     if (pinShown) placeOver(pin, true);
   }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
-  // iOS doesn't report the setting, but it sticks until toggled again, so track it here.
-  let kbdOn = stored('ext-kbd') === '1';
+  // iOS doesn't report which way it is (and it changes on the phone too), so this is a plain
+  // toggle with no on/off label - a guessed one was wrong as often as not.
   const toggleKeyboard = () => {
-    kbdOn = !kbdOn; store('ext-kbd', kbdOn ? '1' : '0');
-    toast(kbdOn ? 'On-screen keyboard on - the iPhone shows its keyboard in text fields'
-                : 'On-screen keyboard off - type with your PC keyboard');
-    refreshLabels();
+    toast("Toggled the iPhone's on-screen keyboard");
     return fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
                              body: JSON.stringify({name: 'keyboard'})}).catch(() => {});
   };
@@ -966,8 +963,8 @@ BODY_INJECT = """
     search: 'Swipe down on the home screen: search',
     siri: 'Hold the side button for Siri (Ctrl+S)',
     pin: 'Type your passcode when iOS hides its keypad from the mirror (lock screen, "Enable UI Automation")',
-    kbd: "Show/hide the iPhone's own keyboard in text fields. iOS hides it while your PC keyboard is connected (Ctrl+K). " +
-         "If you toggled it on the phone itself, click twice to resync",
+    kbd: "Show or hide the iPhone's own keyboard in text fields (Ctrl+K). iOS hides it while your PC keyboard is " +
+         "connected; this flips it either way",
     zin: 'Two-finger zoom in at the screen centre (or Ctrl + mouse wheel). Needs Automation',
     zout: 'Two-finger zoom out (or Ctrl + mouse wheel). Needs Automation',
     shot: 'Save a full-resolution screenshot to Downloads (Ctrl+P)',
@@ -1010,7 +1007,6 @@ BODY_INJECT = """
       if (p.icon === 'desk') p.el.classList.toggle('on', deskOn);
       if (p.icon === 'auto') p.el.classList.toggle('on', auto.wanted);
       if (p.icon === 'dim') p.el.classList.toggle('on', dimmed);
-      if (p.icon === 'kbd') p.el.classList.toggle('on', kbdOn);
       p.el.classList.toggle('needs-auto', NEEDS_AUTO.has(p.icon) && !auto.running);
     }
   }

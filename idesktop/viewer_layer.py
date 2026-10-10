@@ -809,7 +809,8 @@ BODY_INJECT = """
   pin.innerHTML =
     '<div style="font-weight:600;font-size:16px">Type your iPhone passcode</div>' +
     '<div style="color:#9a9aa2;font-size:12px;max-width:80%;text-align:center;line-height:1.4">' +
-    'iOS hides its keypad from mirroring. These keys type on the phone (or use your PC keyboard).</div>' +
+    'iOS hides its keypad from mirroring. These keys type on the phone (or use your PC keyboard). ' +
+    'Codes longer than 6 digits: press Done at the end.</div>' +
     '<div id="ext-pin-dots" style="height:12px;letter-spacing:6px;font-size:20px;line-height:12px"></div>' +
     '<div id="ext-pin-keys" style="display:grid;grid-template-columns:repeat(3,64px);gap:14px 22px"></div>' +
     '<div style="display:flex;gap:28px">' +
@@ -854,7 +855,7 @@ BODY_INJECT = """
     if (k === 'del') { pinCount = Math.max(0, pinCount - 1); pinDots.textContent = '•'.repeat(pinCount); await hidKey(HID_BACKSPACE); return; }
     // After a code goes in, give iOS time to check it (and our lock poll time to catch up) before
     // the keypad may open again - otherwise it pops back up over a phone that's unlocking.
-    if (k === 'ok') { holdUntil = Date.now() + 6000; await hidKey(HID_ENTER); showPin(false); return; }
+    if (k === 'ok') { holdUntil = Date.now() + 6000; pinCount = 0; await hidKey(HID_ENTER); showPin(false); return; }
     e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
     // First digit of a code: tap Shift first, which wakes the lock screen's passcode entry -
     // otherwise iOS can swallow the first digit bringing it up, and the code comes out wrong.
@@ -879,9 +880,10 @@ BODY_INJECT = """
     if (!phoneLocked) { lockDismissed = false; lockedSince = 0; }
     else lockedSince = lockedSince || now;
     // iOS checks a full code by itself (no Done needed): a pause after 4+ digits means it went in.
-    // A pause after a code: iOS has checked it (it submits a full code by itself). If the phone is
-    // still locked it was wrong - start the dots over for the next try.
-    if (pinShown && pinCount && now - typedAt > 2500) { pinCount = 0; pinDots.textContent = ''; }
+    // iOS submits 4- and 6-digit codes by itself; longer (custom) codes need Done / Enter. A long
+    // pause right after 4 or 6 digits means iOS checked it: if the phone is still locked it was
+    // wrong, so start the dots over. Any other length waits for Done (which also resets them).
+    if (pinShown && (pinCount === 4 || pinCount === 6) && now - typedAt > 4000) { pinCount = 0; pinDots.textContent = ''; }
     if (phoneLocked && !pinShown && !lockDismissed && now - lockedSince > 2000 && now > holdUntil) showPin(true, true);
     if (pinShown && pinAuto && wdaOk && !phoneLocked) showPin(false);   // prompt answered / unlocked
     if (pinShown) placeOver(pin, true);

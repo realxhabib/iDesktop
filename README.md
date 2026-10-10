@@ -143,7 +143,7 @@ If you haven't installed the WebDriverAgent extra, the Automation button doesn't
 
 ### Passcode keypad
 
-iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; click them at any pace. iOS checks 4- and 6-digit codes by itself; for any other length (or a letters passcode, typed on your PC keyboard) press Done or Enter at the end. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
+iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; click them at any pace. iOS checks 4- and 6-digit codes by itself; for any other length (or a letters passcode, typed on your PC keyboard) press Done or Enter at the end. Each new code first clears anything stray clicks already typed. If the phone hasn't opened its Enter Passcode screen yet, click **Passcode screen not up yet? Show it** on the keypad. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
 
 ### Lite mode
 

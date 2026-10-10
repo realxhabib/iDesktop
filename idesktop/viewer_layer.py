@@ -801,7 +801,7 @@ BODY_INJECT = """
   // It opens by itself while Automation is starting but WebDriverAgent hasn't answered for a few
   // seconds (that's the prompt), and while the phone is locked (Automation reports that).
   const HID_DIGIT = {1: 0x1E, 2: 0x1F, 3: 0x20, 4: 0x21, 5: 0x22, 6: 0x23, 7: 0x24, 8: 0x25, 9: 0x26, 0: 0x27};
-  const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A, HID_SHIFT = 0xE1;
+  const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A;
   const pin = document.createElement('div');
   pin.id = 'ext-pin';
   pin.style.cssText = 'position:fixed;display:none;z-index:17;background:rgba(12,12,14,.94);color:#fff;' +
@@ -811,6 +811,8 @@ BODY_INJECT = """
     '<div style="color:#9a9aa2;font-size:12px;max-width:80%;text-align:center;line-height:1.4">' +
     'iOS hides its keypad from mirroring. These keys type on the phone (or use your PC keyboard). ' +
     'Codes longer than 6 digits: press Done at the end.</div>' +
+    '<button class="btn" data-k="wake" title="Presses Home: on the lock screen that opens the Enter Passcode screen">' +
+    "Passcode screen not up yet? Show it</button>" +
     '<div id="ext-pin-dots" style="height:12px;letter-spacing:6px;font-size:20px;line-height:12px"></div>' +
     '<div id="ext-pin-keys" style="display:grid;grid-template-columns:repeat(3,64px);gap:14px 22px"></div>' +
     '<div style="display:flex;gap:28px">' +
@@ -851,17 +853,22 @@ BODY_INJECT = """
     const k = e.target.dataset && e.target.dataset.k;
     if (k === undefined) return;
     e.preventDefault(); e.stopPropagation();
+    if (k === 'wake') {
+      await fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify({name: 'home', state: 'press'})}).catch(() => {});
+      pinCount = 0; pinDots.textContent = ''; return;
+    }
     if (k === 'close') { pinDismissedAt = Date.now(); if (phoneLocked) lockDismissed = true; showPin(false); return; }
     if (k === 'del') { pinCount = Math.max(0, pinCount - 1); pinDots.textContent = '•'.repeat(pinCount); await hidKey(HID_BACKSPACE); return; }
     // After a code goes in, give iOS time to check it (and our lock poll time to catch up) before
     // the keypad may open again - otherwise it pops back up over a phone that's unlocking.
     if (k === 'ok') { holdUntil = Date.now() + 6000; pinCount = 0; await hidKey(HID_ENTER); showPin(false); return; }
     e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
-    // First digit of a code: tap Shift first, which wakes the lock screen's passcode entry -
-    // otherwise iOS can swallow the first digit bringing it up, and the code comes out wrong.
+    // First digit of a code: clear whatever is already in the phone's passcode field first (taps
+    // on the mirror land on iOS's hidden keys, so stray clicks type digits nobody sees).
     const fresh = pinCount === 0;
     pinCount++; pinDots.textContent = '•'.repeat(pinCount); typedAt = Date.now();
-    if (fresh) { hidKey(HID_SHIFT); keyChain = keyChain.then(() => sleep(350)); }
+    if (fresh) for (let i = 0; i < 12; i++) hidKey(HID_BACKSPACE);
     await hidKey(HID_DIGIT[k]);
   });
   { const prev = window.__extPlaceOverlays;

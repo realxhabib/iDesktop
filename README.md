@@ -77,6 +77,7 @@ The phone then appears on your desktop. From now on, opening iDesktop goes strai
 |---|---|
 | Tap / swipe | Click / drag on the screen |
 | Scroll | Mouse wheel (Shift+wheel scrolls sideways) |
+| Home / App Switcher | The bar under the phone: click for Home; drag it up or right-click for the App Switcher |
 | Long press | Right-click (hold it as long as you like; right-drag to move icons) |
 | Home | Middle-click the screen, or Ctrl+H |
 | Move the phone | Drag its rim |

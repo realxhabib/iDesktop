@@ -68,6 +68,11 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
  .ext-pill.on { background:#1d2b40; color:#6cb4ff }
  .ext-pill.on:hover { background:#24354e }
  .ext-pill.needs-auto { opacity:.45 }
+ #ext-homebar { display:none }
+ body.ext-compact #ext-homebar { position:fixed; z-index:12; box-sizing:border-box; align-items:center; justify-content:center;
+   background:#26262b; box-shadow:inset 0 1px 0 #ffffff12; cursor:pointer; touch-action:none }
+ body.ext-compact #ext-homebar:hover { background:#34343a }
+ #ext-homebar span { width:46%; height:5px; border-radius:3px; background:#e8e8ee; pointer-events:none }
  .ext-pill.danger:hover { background:#4a1d20; color:#ffb4b4 }
  .ext-fab svg, .ext-pill svg { width:15px; height:15px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9;
    stroke-linecap:round; stroke-linejoin:round; opacity:.92 }
@@ -567,6 +572,27 @@ BODY_INJECT = """
   const camCtl = document.createElement('div'); camCtl.id = 'ext-camctl';   // Camera Control (cosmetic)
   const extCtl = document.createElement('div'); extCtl.id = 'ext-ctl';
   extPhone.append(extBezel, camCtl); document.body.append(extPhone, extCtl);
+  // Home bar under the phone, like the iPhone's home indicator: click = Home,
+  // right-click or drag it upward = App Switcher.
+  const homeBar = document.createElement('div');
+  homeBar.id = 'ext-homebar'; homeBar.title = 'Click: Home  ·  Drag up or right-click: App Switcher';
+  homeBar.innerHTML = '<span></span>';
+  document.body.appendChild(homeBar);
+  const HOMEBAR_H = 26, HOMEBAR_GAP = 8;
+  let hbDown = null;
+  homeBar.addEventListener('pointerdown', (e) => {
+    if (e.button === 2) return;
+    e.preventDefault(); hbDown = {y: e.clientY, id: e.pointerId};
+    try { homeBar.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  homeBar.addEventListener('pointerup', (e) => {
+    if (!hbDown || e.pointerId !== hbDown.id) return;
+    const dy = e.clientY - hbDown.y; hbDown = null;
+    if (dy < -14) gestures['App Switcher']();
+    else fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                           body: JSON.stringify({name: 'home', state: 'press'})}).catch(() => {});
+  });
+  homeBar.addEventListener('contextmenu', (e) => { e.preventDefault(); gestures['App Switcher'](); });
   const moved = [];   // [node, parent, nextSibling] so the full layout can be put back
   const moveInto = (node, dest) => { if (!node || node.parentNode === dest) return;
                                      moved.push([node, node.parentNode, node.nextSibling]); dest.appendChild(node); };
@@ -1013,7 +1039,7 @@ BODY_INJECT = """
         for (const hw of document.querySelectorAll('#device-frame .hw')) moveInto(hw, extPhone);
         refreshLabels();
       } else {
-        restoreMoved(); menuOpen = false; fab.innerHTML = svg('more'); toastEl.removeAttribute('style');
+        restoreMoved(); menuOpen = false; homeBar.style.display = 'none'; fab.innerHTML = svg('more'); toastEl.removeAttribute('style');
         canvas.removeAttribute('style');
         for (const hw of document.querySelectorAll('#device-frame .hw'))
           for (const k of ['left', 'top', 'width', 'height', 'display']) hw.style.removeProperty(k);
@@ -1028,7 +1054,8 @@ BODY_INJECT = """
     const full = innerWidth >= screen.availWidth * 0.9;
     const sideways = natW > natH;
     let L = parseFloat(stored('ext-L')) || Math.min(screen.availHeight * 0.88, 1000);
-    L = Math.max(320, Math.min(L, sideways ? screen.availWidth * 0.9 : (full ? innerHeight - 6 : screen.availHeight * 0.97)));
+    const below = bigFloat ? 0 : HOMEBAR_H + HOMEBAR_GAP;   // room for the home bar under the phone
+    L = Math.max(320, Math.min(L, sideways ? screen.availWidth * 0.9 : (full ? innerHeight - 6 - below : screen.availHeight * 0.97 - below)));
     if (bigFloat) L = sideways ? Math.min(innerWidth - 250, (innerHeight - 10) * natW / natH) : innerHeight - 10;
     const RIM = Math.max(3, Math.round(L * 0.0035)), B = Math.max(7, Math.round(L * 0.009)), E = RIM + B;
     let sw, sh;
@@ -1037,7 +1064,7 @@ BODY_INJECT = """
     const pw = sw + 2 * E, ph = sh + 2 * E, sr = Math.round(Math.min(sw, sh) * 0.13), R = sr + E;
     const PAD = 4, FAB = 42, PH = 32, PW = 196, CXR = pw + PAD + 14;   // controls column, relative
     if (full) {
-      const maxX = innerWidth - (PAD + CXR + FAB + 4), maxY = innerHeight - ph - 2;
+      const maxX = innerWidth - (PAD + CXR + FAB + 4), maxY = innerHeight - ph - 2 - below;
       posX = Math.max(0, Math.min(posX, maxX)); posY = Math.max(0, Math.min(posY, maxY));
     }
     const OX = Math.round(bigFloat ? (innerWidth - pw) / 2 - PAD - 100 : posX);
@@ -1045,8 +1072,13 @@ BODY_INJECT = """
     place(extPhone, X, OY, pw, ph, R);
     place(extBezel, RIM, RIM, pw - 2 * RIM, ph - 2 * RIM, R - RIM);
     place(canvas, B, B, sw, sh, sr);
+    // Home bar centred under the phone (hidden in Big Screen).
+    const hbW = Math.round(Math.min(150, pw * 0.36));
+    homeBar.style.display = bigFloat ? 'none' : 'flex';
+    place(homeBar, Math.round(X + (pw - hbW) / 2), OY + ph + HOMEBAR_GAP, hbW, HOMEBAR_H, 10);
     Object.assign(toastEl.style, {left: (X + pw / 2) + 'px', top: (OY + ph - 70) + 'px', bottom: 'auto'});
     const shapes = [{x: X, y: OY, w: pw, h: ph, r: R}];
+    if (!bigFloat) shapes.push({x: Math.round(X + (pw - hbW) / 2), y: OY + ph + HOMEBAR_GAP, w: hbW, h: HOMEBAR_H, r: 10});
     // Side buttons on the long edges (portrait: left = action/volume, right = power + Camera Control).
     const side = [];
     for (const hw of extPhone.querySelectorAll('.hw')) {

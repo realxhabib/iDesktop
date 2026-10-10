@@ -56,16 +56,19 @@ try { for (const s of ['left','right']) if (!localStorage.getItem('tray-'+s)) lo
  body.ext-compact #ext-phone .hw:active { filter:brightness(.8) }
  #ext-camctl { position:absolute; border-radius:2px; background:linear-gradient(90deg,#4f4d49,#8f8c86 50%,#4f4d49) }
  body.ext-compact #ext-ctl { display:block; position:fixed; top:0; z-index:20; font:500 12.5px/1 -apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif }
+ /* No outline at the very edge: the window region that cuts these out is aliased, and a stepped
+    edge cutting through a 1px border looks rough. Solid fills (+ an inner top highlight) stay crisp. */
  .ext-fab, .ext-pill { position:absolute; box-sizing:border-box; display:flex; align-items:center; gap:10px; cursor:pointer;
-   color:#f2f2f7; background:linear-gradient(180deg,#2c2c31,#1c1c20); border:1px solid #3a3a40;
-   box-shadow:inset 0 1px 0 #ffffff14; user-select:none; transition:background .12s, border-color .12s }
- .ext-fab:hover, .ext-pill:hover { background:linear-gradient(180deg,#3a3a41,#26262b); border-color:#4c4c54 }
- .ext-fab:active, .ext-pill:active { background:#18181b }
- .ext-fab { justify-content:center; border-radius:12px }
- .ext-pill { padding:0 12px 0 11px; gap:9px; border-radius:9px; white-space:nowrap }
- .ext-pill.on { border-color:#0a84ff; color:#fff }
+   color:#f2f2f7; background:#26262b; border:0;
+   box-shadow:inset 0 1px 0 #ffffff12; user-select:none; transition:background .12s, color .12s }
+ .ext-fab:hover, .ext-pill:hover { background:#34343a }
+ .ext-fab:active, .ext-pill:active { background:#1b1b1f }
+ .ext-fab { justify-content:center; border-radius:10px }
+ .ext-pill { padding:0 12px 0 11px; gap:9px; border-radius:8px; white-space:nowrap }
+ .ext-pill.on { background:#1d2b40; color:#6cb4ff }
+ .ext-pill.on:hover { background:#24354e }
  .ext-pill.needs-auto { opacity:.45 }
- .ext-pill.danger:hover { background:linear-gradient(180deg,#5a2224,#3d1618); border-color:#8a2c30 }
+ .ext-pill.danger:hover { background:#4a1d20; color:#ffb4b4 }
  .ext-fab svg, .ext-pill svg { width:15px; height:15px; flex:none; stroke:currentColor; fill:none; stroke-width:1.9;
    stroke-linecap:round; stroke-linejoin:round; opacity:.92 }
  .ext-pill:not(.show) { display:none }
@@ -592,6 +595,7 @@ BODY_INJECT = """
     unplug: '<path d="M7 7l10 10M9 4v4M15 4v4M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
     scroll: '<rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v4"/>',
     refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+    pin: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
   };
@@ -607,7 +611,8 @@ BODY_INJECT = """
      ['bell', 'Notifications', () => gestures['Notifications']()],
      ['search', 'Spotlight', () => gestures['Spotlight']()],
      ['siri', 'Siri', upClick('#bottom-row [data-btn="siri"]')],
-     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()]],
+     ['kbd', () => kbdOn ? 'On-screen keyboard: on' : 'On-screen keyboard: off', () => toggleKeyboard()],
+     ['pin', 'Passcode keypad', () => { setMenu(false); showPin(true); }]],
     [['zin', 'Zoom in', () => pinch(0.5, 0.5, 1.8)],
      ['zout', 'Zoom out', () => pinch(0.5, 0.5, 0.5)],
      ['shot', 'Screenshot', () => fullResShot({preventDefault() {}, stopImmediatePropagation() {}})],
@@ -763,6 +768,72 @@ BODY_INJECT = """
     pausedShown = showPaused;
     placeOver(paused, showPaused);
   }, 1000);
+  // ---- Passcode keypad. iOS hides passcode keypads from screen capture (the "Enable UI
+  // Automation" prompt, the lock screen), so the mirror shows the prompt but no keys. This keypad
+  // types the digits as keyboard keys instead, which iOS accepts there, wherever its own keys are.
+  // It opens by itself while Automation is starting but WebDriverAgent hasn't answered for a few
+  // seconds (that's the prompt), and from the controls.
+  const HID_DIGIT = {1: 0x1E, 2: 0x1F, 3: 0x20, 4: 0x21, 5: 0x22, 6: 0x23, 7: 0x24, 8: 0x25, 9: 0x26, 0: 0x27};
+  const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A;
+  const pin = document.createElement('div');
+  pin.id = 'ext-pin';
+  pin.style.cssText = 'position:fixed;display:none;z-index:17;background:rgba(12,12,14,.94);color:#fff;' +
+    'flex-direction:column;align-items:center;justify-content:center;gap:18px;font:15px system-ui;box-sizing:border-box';
+  pin.innerHTML =
+    '<div style="font-weight:600;font-size:16px">Type your iPhone passcode</div>' +
+    '<div style="color:#9a9aa2;font-size:12px;max-width:80%;text-align:center;line-height:1.4">' +
+    'iOS hides its keypad from mirroring. These keys type on the phone (or use your PC keyboard).</div>' +
+    '<div id="ext-pin-dots" style="height:12px;letter-spacing:6px;font-size:20px;line-height:12px"></div>' +
+    '<div id="ext-pin-keys" style="display:grid;grid-template-columns:repeat(3,64px);gap:14px 22px"></div>' +
+    '<div style="display:flex;gap:28px">' +
+    '<button class="btn" data-k="close">Close</button><button class="btn" data-k="del">Delete</button>' +
+    '<button class="btn" data-k="ok">Done</button></div>';
+  document.body.appendChild(pin);
+  const pinKeys = pin.querySelector('#ext-pin-keys'), pinDots = pin.querySelector('#ext-pin-dots');
+  for (const d of [1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, null]) {
+    const k = document.createElement('div');
+    if (d !== null) {
+      k.textContent = d; k.dataset.k = d;
+      k.style.cssText = 'width:64px;height:64px;border-radius:50%;background:#2c2c31;display:flex;align-items:center;' +
+        'justify-content:center;font-size:26px;cursor:pointer;user-select:none';
+    }
+    pinKeys.appendChild(k);
+  }
+  let pinShown = false, pinAuto = false, pinDismissedAt = 0, pinCount = 0, wdaOk = false, autoWaitSince = 0;
+  async function hidKey(usage) {
+    for (const usages of [[usage], []]) {
+      await fetch('/key', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                           body: JSON.stringify({usages})}).catch(() => {});
+    }
+  }
+  function showPin(on, auto = false) {
+    pinShown = on; pinAuto = on && auto;
+    if (!on) { pinCount = 0; pinDots.textContent = ''; }
+    placeOver(pin, on);
+  }
+  pin.addEventListener('pointerdown', async (e) => {
+    const k = e.target.dataset && e.target.dataset.k;
+    if (k === undefined) return;
+    e.preventDefault(); e.stopPropagation();
+    if (k === 'close') { pinDismissedAt = Date.now(); showPin(false); return; }
+    if (k === 'del') { pinCount = Math.max(0, pinCount - 1); pinDots.textContent = '•'.repeat(pinCount); await hidKey(HID_BACKSPACE); return; }
+    if (k === 'ok') { await hidKey(HID_ENTER); showPin(false); return; }
+    e.target.style.background = '#4a4a52'; setTimeout(() => { e.target.style.background = '#2c2c31'; }, 120);
+    pinCount++; pinDots.textContent = '•'.repeat(pinCount);
+    await hidKey(HID_DIGIT[k]);
+  });
+  { const prev = window.__extPlaceOverlays;
+    window.__extPlaceOverlays = () => { prev?.(); if (pinShown) placeOver(pin, true); }; }
+  setInterval(() => {
+    // Automation wanted and its runner started, but WebDriverAgent not answering: iOS is most likely
+    // waiting for the passcode to "Enable UI Automation".
+    if (auto.wanted && auto.running && !wdaOk) autoWaitSince = autoWaitSince || Date.now();
+    else autoWaitSince = 0;
+    if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && Date.now() - pinDismissedAt > 60000)
+      showPin(true, true);
+    if (pinShown && pinAuto && wdaOk) showPin(false);       // Automation is up: prompt answered
+    if (pinShown) placeOver(pin, true);
+  }, 1000);
   // iOS hides its keyboard while ours (a hardware keyboard to iOS) is attached; Eject toggles it.
   // iOS doesn't report the setting, but it sticks until toggled again, so track it here.
   let kbdOn = stored('ext-kbd') === '1';
@@ -845,6 +916,7 @@ BODY_INJECT = """
     bell: 'Swipe down from the top-left: notifications',
     search: 'Swipe down on the home screen: search',
     siri: 'Hold the side button for Siri (Ctrl+S)',
+    pin: 'Type your passcode when iOS hides its keypad from the mirror (lock screen, "Enable UI Automation")',
     kbd: "Show/hide the iPhone's own keyboard in text fields. iOS hides it while your PC keyboard is connected (Ctrl+K). " +
          "If you toggled it on the phone itself, click twice to resync",
     zin: 'Two-finger zoom in at the screen centre (or Ctrl + mouse wheel). Needs Automation',
@@ -1008,13 +1080,13 @@ BODY_INJECT = """
     Object.assign(extCtl.style, {left: CX + 'px', top: OY + 'px'});
     const fabX = onLeft ? ctlW - FAB : 0;
     // Small corner radii on purpose: the window region that cuts these out isn't anti-aliased,
-    // so large round ends show stair steps; 9-12 px corners look crisp.
-    place(fab, fabX, 0, FAB, FAB, 12);
-    shapes.push({x: CX + fabX, y: OY, w: FAB, h: FAB, r: 12});
+    // so large round ends show stair steps; 8-10 px corners look crisp.
+    place(fab, fabX, 0, FAB, FAB, 10);
+    shapes.push({x: CX + fabX, y: OY, w: FAB, h: FAB, r: 10});
     for (const [p, c, py] of placed) {
       const px = onLeft ? ctlW - PW - c * (PW + GAPC) : c * (PW + GAPC);   // column 0 next to the phone
-      place(p.el, px, py, PW, PH, 9);
-      shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: 9});
+      place(p.el, px, py, PW, PH, 8);
+      shapes.push({x: CX + px, y: OY + py, w: PW, h: PH, r: 8});
     }
     try { window.__extPlaceOverlays?.(); } catch (e) {}   // overlays follow the phone (drag)
     // Big Screen: the whole (maximized) window is shown, black around the phone.
@@ -1095,6 +1167,7 @@ BODY_INJECT = """
     if (!autoRot) return;
     try {
       const o = await (await fetch(EXT + '/orientation', {cache: 'no-store'})).json();
+      wdaOk = !!o.ok;
       if (!o.ok) return;
       let deg = 0;
       if (o.landscape) deg = (o.z === 270 ? -90 : 90) * window.EXT_ROT_SIGN;  // verified on iPhone17,2: z=270 -> -90

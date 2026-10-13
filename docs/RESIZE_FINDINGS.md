@@ -7,7 +7,8 @@ Tested 2026-10-13 · macOS 27.0.1 · Xcode 27.0 (27A266a, CoreDevice 642.16) · 
 - **No request exists to capture.** Device Hub's Resize Mode only works for simulators. On the physical iPhone, Xcode greys it out and `devicectl` refuses before sending anything.
 - **The phone has the resize code but doesn't expose it.** Xcode 27's Developer Disk Image installs a resizable-app session server in `dtappserviced`. It is only registered as a local Mach service. The one remote entry point, `com.apple.coredevice.appservice`, answers *"Action … is not implemented"* when asked for it.
 - **iOS on the phone is ready.** The read-only resizability stream *is* reachable over RemoteXPC. With Settings and Safari in front, it reports them as `hasResizableForegroundApplication`.
-- **For iDesktop:** nothing to ship yet. The Python below can detect resizable apps today. The last section lists the signals that would show Apple has opened the session protocol to physical devices.
+- **A companion app on the phone can't trigger it either (tested).** The app sandbox blocks lookups of the resize service, and SpringBoard's resizing API needs the private `com.apple.springboard.appResizing` entitlement.
+- **For iDesktop:** nothing to ship yet. The Python below can detect resizable apps today. The section "How to tell when Apple opens it up" lists the signals that would show Apple has opened the session protocol to physical devices.
 
 ## Why Device Hub greys it out on a real iPhone
 
@@ -133,7 +134,23 @@ Any one of these means the session protocol has become reachable on devices. Whe
 A companion app on the phone, driven by the PC, can't do it on stock iOS:
 
 - **`dtappserviced` needs a private entitlement to resize.** It holds `com.apple.springboard.appResizing`, alongside `com.apple.frontboard.launchapplications`, `com.apple.frontboard.debugapplications` and `com.apple.frontboardservices.display-layout-monitor`. That is what lets it call SpringBoard's `SBSAppResizingService`. Only Apple can sign `com.apple.*` private entitlements into a binary; a developer-signed app that claims one won't install or launch.
-- **Its resize server is only a local Mach service** (`com.apple.coredevice.feature.resizableappmanagement`). The daemon doesn't log an entitlement check on its callers; it tracks them by peer connection and audit token. Third-party apps, however, are sandboxed to an allowlist of Mach services, and this one is very unlikely to be on it.
+- **An app can't reach the resize server (tested).** It is only a local Mach service (`com.apple.coredevice.feature.resizableappmanagement`), and the app sandbox blocks the lookup. A minimal developer-signed test app (Personal Team, iOS 27.0.1), launched with `devicectl device process launch --console`, got:
+
+  | Mach service | `bootstrap_look_up` | XPC message |
+  |---|---|---|
+  | `com.apple.cfprefsd.daemon` (control: allowed for apps) | `0` (found) | — |
+  | `com.example.resizeprobe.does-not-exist` (control: no such service) | `1100` `BOOTSTRAP_NOT_PRIVILEGED` | — |
+  | `com.apple.coredevice.feature.resizableappmanagement` | `1100` `BOOTSTRAP_NOT_PRIVILEGED` | `Connection invalid` |
+  | `com.apple.coredevice.feature.streamresizabilitystate` | `1100` `BOOTSTRAP_NOT_PRIVILEGED` | `Connection invalid` |
+
+  The phone's kernel log (`pymobiledevice3 syslog live`) names the cause:
+
+  ```text
+  kernel{Sandbox}: Sandbox: ResizeProbe(<pid>) deny(1) mach-lookup com.apple.coredevice.feature.resizableappmanagement
+  kernel{Sandbox}: Sandbox: ResizeProbe(<pid>) deny(1) mach-lookup com.apple.coredevice.feature.streamresizabilitystate
+  ```
+
+  The non-existent name fails the same way, so the sandbox rejects anything off its allowlist before launchd looks the name up. `xpc_connection_create_mach_service` is marked unavailable for iOS in the SDK, but it is present at runtime (the app resolved it with `dlsym`). It just can't get past the sandbox.
 - The only other way around this is a jailbreak, which isn't a basis for iDesktop.
 
 ## Dead ends, so they aren't retried

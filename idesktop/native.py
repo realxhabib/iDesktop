@@ -278,7 +278,7 @@ DIAL_TIMEOUT = 6.0   # seconds for one device-side TCP connect through the users
 
 
 def patch_userspace_dial_timeout() -> None:
-    """Bound device-side connects in the userspace tunnel.
+    """Fix device-side connects in the userspace tunnel: random source ports, and a timeout.
 
     pymobiledevice3's dial plane answers the local client as soon as its relay socket connects,
     then awaits PyTCP's connect to the phone with no timeout. Every so often the phone stops
@@ -287,7 +287,19 @@ def patch_userspace_dial_timeout() -> None:
     DIAL_TIMEOUT, retry once on a fresh socket (a new ephemeral port may get through), then fail
     so the relay closes the client at once instead of leaving it hanging."""
     import asyncio
+    from pmd_pytcp.socket import socket__bind_helpers as bind_helpers
+    from pmd_pytcp.socket import tcp__socket
     from pymobiledevice3.remote import userspace_tunnel as ut
+
+    # The root cause: pmd-pytcp's connect() picks the source port with RFC 6056 Algorithm 3 but
+    # leaves out its per-destination counter, so every connection to device:port starts at the
+    # same port and takes the first free one. Once a connection closes, the next reuses its
+    # exact 4-tuple while iOS still holds the old one (TIME_WAIT), and iOS ignores the SYN. A
+    # random free port per connection (RFC 6056 §3.3.1) avoids that.
+    def pick_local_port_for(*, local_ip, remote_ip, remote_port):
+        return bind_helpers.pick_local_port()
+
+    tcp__socket.pick_local_port_for = pick_local_port_for
 
     async def connect_tcp(self, addr: str, port: int):
         for attempt in (1, 2):

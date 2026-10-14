@@ -274,6 +274,45 @@ async def _wda_relay(server, port: int, device_port: int = 8100) -> None:
         await srv.serve_forever()
 
 
+DIAL_TIMEOUT = 6.0   # seconds for one device-side TCP connect through the userspace tunnel
+
+
+def patch_userspace_dial_timeout() -> None:
+    """Bound device-side connects in the userspace tunnel.
+
+    pymobiledevice3's dial plane answers the local client as soon as its relay socket connects,
+    then awaits PyTCP's connect to the phone with no timeout. Every so often the phone stops
+    answering new SYNs (existing connections keep working) and each new connection - a WDA
+    request through _wda_relay, say - hangs forever while retries pile up. Give each connect
+    DIAL_TIMEOUT, retry once on a fresh socket (a new ephemeral port may get through), then fail
+    so the relay closes the client at once instead of leaving it hanging."""
+    import asyncio
+    from pymobiledevice3.remote import userspace_tunnel as ut
+
+    async def connect_tcp(self, addr: str, port: int):
+        for attempt in (1, 2):
+            s = ut.pytcp_socket(ut.AF_INET6, ut.SOCK_STREAM)
+            try:
+                await asyncio.wait_for(s.connect((addr, port)), DIAL_TIMEOUT)
+                return s
+            except asyncio.TimeoutError:
+                log.warning("tunnel dial to device port %d timed out after %.0f s (attempt %d)",
+                            port, DIAL_TIMEOUT, attempt)
+                try:
+                    s.close()
+                except Exception:
+                    pass
+            except BaseException:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+                raise
+        raise ConnectionError(f"device port {port} not answering through the tunnel")
+
+    ut.UserspaceTun.connect_tcp = connect_tcp
+
+
 REMOTEPAIRING_PORTS = (49152, 49153, 49154, 49155, 49156)
 
 
@@ -680,6 +719,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if not a.helper_only:
         patch_screen_stream(a.ext_port, a.wda_bundle, a.wda_port)
+        patch_userspace_dial_timeout()
         if a.wifi_host:
             patch_wifi_fallback(a.wifi_host)
     if a.helper_only:

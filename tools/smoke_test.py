@@ -41,6 +41,10 @@ def native_patches_apply():
     from idesktop import native
     native.patch_screen_stream(18091, "com.example.wda", 18100)
     native.patch_wifi_fallback("192.0.2.1")
+    native.patch_userspace_dial_timeout()
+    from pymobiledevice3.remote import userspace_tunnel as ut
+    assert ut.UserspaceTun.connect_tcp.__module__ == "idesktop.native"
+    assert hasattr(ut, "pytcp_socket") and hasattr(ut, "AF_INET6") and hasattr(ut, "SOCK_STREAM")
     assert "keyboard" in ss._NAMED_BUTTONS
     html = native.build_html(ss.VIEWER_HTML if isinstance(ss.VIEWER_HTML, bytes) else ss.VIEWER_HTML.encode(), 18091)
     assert b"<title>iDesktop</title>" in html and b"127.0.0.1:18091" in html

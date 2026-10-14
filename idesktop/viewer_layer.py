@@ -669,12 +669,13 @@ BODY_INJECT = """
   // Automation = WebDriverAgent (auto-rotate, pinch, "Sound on PC only"). While it runs iOS shows
   // "Automation Running"; holding both volume buttons on the phone also turns it off.
   const CTL = 'http://127.0.0.1:__CTL_PORT__/automation';
-  let auto = {available: false, wanted: false, running: false};
+  let auto = {available: false, wanted: false, running: false}, runnerStartedAt = 0;
   async function pollAutomation() {
     const prev = auto;
     try {
       auto = await (await fetch(CTL, {cache: 'no-store'})).json();
       if (prev.wanted && !auto.wanted) toast('Automation off - auto-rotate and pinch paused');
+      if (!prev.running && auto.running) runnerStartedAt = Date.now();   // iOS may ask for the passcode now
     } catch (e) {}
     pills.find(p => p.icon === 'auto')?.el.classList.toggle('hidden-pill', !auto.available);
     refreshLabels();
@@ -798,8 +799,9 @@ BODY_INJECT = """
   // ---- Passcode keypad. iOS hides passcode keypads from screen capture (the "Enable UI
   // Automation" prompt, the lock screen), so the mirror shows the prompt but no keys. This keypad
   // types the digits as keyboard keys instead, which iOS accepts there, wherever its own keys are.
-  // It opens by itself while Automation is starting but WebDriverAgent hasn't answered for a few
-  // seconds (that's the prompt), and while the phone is locked (Automation reports that).
+  // It opens by itself only when a passcode is really wanted: once, when Automation's runner has
+  // just started and WebDriverAgent hasn't answered for a few seconds (that's the prompt), and on
+  // the first click on the mirror while the phone is locked (Automation reports that).
   const HID_DIGIT = {1: 0x1E, 2: 0x1F, 3: 0x20, 4: 0x21, 5: 0x22, 6: 0x23, 7: 0x24, 8: 0x25, 9: 0x26, 0: 0x27};
   const HID_ENTER = 0x28, HID_BACKSPACE = 0x2A;
   const pin = document.createElement('div');
@@ -830,7 +832,7 @@ BODY_INJECT = """
     pinKeys.appendChild(k);
   }
   let pinShown = false, pinAuto = false, pinDismissedAt = 0, pinCount = 0, wdaOk = false, autoWaitSince = 0;
-  let phoneLocked = false, lockDismissed = false, lockedSince = 0, typedAt = 0, holdUntil = 0;
+  let phoneLocked = false, lockDismissed = false, typedAt = 0, holdUntil = 0, pinShownAt = 0, promptFor = -1;
   // Keys go out strictly one after another: two quick clicks must not overlap (key A down, key B
   // down, both up), which iOS can read as one key and the code comes out short.
   let keyChain = Promise.resolve();
@@ -845,6 +847,7 @@ BODY_INJECT = """
     return keyChain;
   }
   function showPin(on, auto = false) {
+    if (on && !pinShown) pinShownAt = Date.now();
     pinShown = on; pinAuto = on && auto;
     if (!on) { pinCount = 0; pinDots.textContent = ''; }
     placeOver(pin, on);
@@ -853,6 +856,7 @@ BODY_INJECT = """
     const k = e.target.dataset && e.target.dataset.k;
     if (k === undefined) return;
     e.preventDefault(); e.stopPropagation();
+    if (Date.now() - pinShownAt < 500) return;   // a click meant for the screen as the keypad appeared
     if (k === 'wake') {
       await fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
                               body: JSON.stringify({name: 'home', state: 'press'})}).catch(() => {});
@@ -873,25 +877,30 @@ BODY_INJECT = """
   });
   { const prev = window.__extPlaceOverlays;
     window.__extPlaceOverlays = () => { prev?.(); if (pinShown) placeOver(pin, true); }; }
+  // Locked phone: the first click on the mirror opens the keypad instead of tapping the lock screen
+  // (that's someone wanting in). After Close, clicks reach the lock screen until the next lock.
+  window.addEventListener('pointerdown', (e) => {
+    if (e.target !== canvas || e.button !== 0 || !phoneLocked || pinShown || lockDismissed) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    showPin(true, true);
+  }, true);
   setInterval(() => {
-    // Automation wanted and its runner started, but WebDriverAgent not answering: iOS is most likely
-    // waiting for the passcode to "Enable UI Automation".
+    // Automation's runner just started and WebDriverAgent isn't answering: iOS is most likely
+    // waiting for the passcode to "Enable UI Automation". Only then, and once per start - a slow or
+    // stuck WebDriverAgent later on is not a passcode prompt.
     if (auto.wanted && auto.running && !wdaOk) autoWaitSince = autoWaitSince || Date.now();
     else autoWaitSince = 0;
-    if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && Date.now() - pinDismissedAt > 60000 &&
-        Date.now() > holdUntil)
-      showPin(true, true);
-    // Locked (known while Automation runs): show it once the phone has stayed locked a moment, until
-    // it unlocks; closing it lasts until the next lock.
+    if (!pinShown && autoWaitSince && Date.now() - autoWaitSince > 7000 && promptFor !== runnerStartedAt &&
+        Date.now() - runnerStartedAt < 90000 && Date.now() > holdUntil) {
+      promptFor = runnerStartedAt; showPin(true, true);
+    }
     const now = Date.now();
-    if (!phoneLocked) { lockDismissed = false; lockedSince = 0; }
-    else lockedSince = lockedSince || now;
+    if (!phoneLocked) lockDismissed = false;
     // iOS checks a full code by itself (no Done needed): a pause after 4+ digits means it went in.
     // iOS submits 4- and 6-digit codes by itself; longer (custom) codes need Done / Enter. A long
     // pause right after 4 or 6 digits means iOS checked it: if the phone is still locked it was
     // wrong, so start the dots over. Any other length waits for Done (which also resets them).
     if (pinShown && (pinCount === 4 || pinCount === 6) && now - typedAt > 4000) { pinCount = 0; pinDots.textContent = ''; }
-    if (phoneLocked && !pinShown && !lockDismissed && now - lockedSince > 2000 && now > holdUntil) showPin(true, true);
     if (pinShown && pinAuto && wdaOk && !phoneLocked) showPin(false);   // prompt answered / unlocked
     if (pinShown) placeOver(pin, true);
   }, 1000);

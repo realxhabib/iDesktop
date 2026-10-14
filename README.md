@@ -143,7 +143,7 @@ If you haven't installed the WebDriverAgent extra, the Automation button doesn't
 
 ### Passcode keypad
 
-iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen whenever that's needed: when Automation is waiting for the passcode, and (with Automation on) whenever the phone stays locked for a couple of seconds. Its keys type the digits on the phone; click them at any pace. iOS checks 4- and 6-digit codes by itself; for any other length (or a letters passcode, typed on your PC keyboard) press Done or Enter at the end. Each new code first clears anything stray clicks already typed. If the phone hasn't opened its Enter Passcode screen yet, click **Passcode screen not up yet? Show it** on the keypad. Close it if you don't need it; it comes back the next time the phone locks. Your PC keyboard's number keys and Enter always work too.
+iOS hides its passcode keypad from screen mirroring, so on the lock screen or the "Enable UI Automation" prompt you'd see the prompt but no keys. iDesktop puts its own keypad over the phone's screen when it's needed: once when Automation starts and iOS asks for the passcode, and (with Automation on) when you click the mirror while the phone is locked. Its keys type the digits on the phone; click them at any pace. iOS checks 4- and 6-digit codes by itself; for any other length (or a letters passcode, typed on your PC keyboard) press Done or Enter at the end. Each new code first clears anything stray clicks already typed. If the phone hasn't opened its Enter Passcode screen yet, click **Passcode screen not up yet? Show it** on the keypad. Close it if you don't need it; clicks then reach the lock screen until the phone locks again. Your PC keyboard's number keys and Enter always work too.
 
 ### Lite mode
 
@@ -184,7 +184,7 @@ It builds `WebDriverAgent.ipa` and walks you through sideloading it with [Sidelo
 | Black screen, "cannot decode the HD video" | Install [HEVC Video Extensions](https://apps.microsoft.com/detail/9NMZLZ57R3T7) and reopen iDesktop. |
 | HD stops during a call | iOS blocks screen streaming while the camera or mic is in use. HD comes back by itself after the call; with the WebDriverAgent extra you keep using the phone in [Lite mode](#lite-mode) meanwhile. |
 | Won't start without the cable | Start it once with the cable (that sets up Wi-Fi pairing), keep both on the same network, and unlock the phone. Networks that isolate devices from each other (guest or hotel Wi-Fi) won't work. |
-| A passcode prompt shows no number pad | iOS hides passcode keypads from mirroring. iDesktop shows its own keypad by itself, for "Enable UI Automation" and (with Automation on) whenever the phone is locked. You can always type the digits on your PC keyboard and press Enter. |
+| A passcode prompt shows no number pad | iOS hides passcode keypads from mirroring. iDesktop shows its own keypad for "Enable UI Automation", and (with Automation on) when you click the mirror while the phone is locked. You can always type the digits on your PC keyboard and press Enter. |
 | Picture frozen, but taps still work | Click **Refresh** in the controls (or press F5 in the iDesktop window). |
 | Something else | Logs are in `%APPDATA%\iDesktop\logs`. Please attach `native.log` and `launcher.log` to an [issue](../../issues). |
 

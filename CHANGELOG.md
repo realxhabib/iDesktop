@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Passcode keypad opens far less often: once when Automation starts and iOS asks, or when you click the mirror of a locked phone - no longer on every lock or whenever WebDriverAgent is slow. Its keys ignore clicks for half a second after it appears.
 - Passcode keypad clears the phone's passcode field before each new code, and has a button that opens the Enter Passcode screen.
 - The keyboard button is a plain Show / hide toggle: iOS doesn't report the state, and the guessed on/off label could be backwards.
 - App Switcher works: it's a double press of Home now (iOS ignores edge swipes from the HID touch input). The home bar opens it on double-click, drag up or right-click.

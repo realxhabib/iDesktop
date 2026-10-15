@@ -116,12 +116,39 @@ class _Automation:
         task = cls.run_task
         if task is not None and not task.done():
             log.info("stopping WebDriverAgent before exiting")
+            # Ending the XCUITest session alone leaves iOS to wind the runner down in its own time
+            # (the notice lingered); killing the runner process makes iOS drop it at once.
+            try:
+                await asyncio.wait_for(cls._kill_runner(), 3)
+            except Exception as e:
+                log.info("could not kill the WebDriverAgent runner: %s: %s", type(e).__name__, e)
             task.cancel()
             try:
-                await asyncio.wait_for(asyncio.shield(asyncio.gather(task, return_exceptions=True)), 4)
+                await asyncio.wait_for(asyncio.shield(asyncio.gather(task, return_exceptions=True)), 1.5)
             except Exception:
                 pass
         os._exit(code)
+
+    server = None   # the stream server, for its tunnel (set by _keep_wda_running)
+
+    @classmethod
+    async def _kill_runner(cls) -> None:
+        """SIGKILL the WebDriverAgent runner app on the phone (CoreDevice appservice)."""
+        from pymobiledevice3.remote.core_device.app_service import AppServiceService
+
+        def mentions_runner(v) -> bool:
+            if isinstance(v, dict):
+                return any(mentions_runner(x) for x in v.values())
+            if isinstance(v, (list, tuple)):
+                return any(mentions_runner(x) for x in v)
+            return isinstance(v, str) and "WebDriverAgentRunner" in v
+
+        async with AppServiceService(cls.server._rsd) as svc:
+            for p in await svc.list_processes():
+                pid = p.get("processIdentifier")
+                if pid and mentions_runner(p):
+                    log.info("killing WebDriverAgent runner (pid %s) on the phone", pid)
+                    await svc.send_signal_to_process(int(pid), 9)
 
     @classmethod
     def state(cls) -> dict:
@@ -136,7 +163,7 @@ async def _keep_wda_running(server, bundle: str) -> None:
     from pymobiledevice3.services.dvt.testmanaged.xcuitest import TestConfig, XCUITestService
 
     A = _Automation
-    A.available, A.changed = True, asyncio.Event()
+    A.available, A.changed, A.server = True, asyncio.Event(), server
     loop = asyncio.get_running_loop()
     while True:
         if not A.wanted:

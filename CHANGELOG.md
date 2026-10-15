@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Quitting (and Disconnect) now ends Automation on the phone properly, so "Automation Running" doesn't stay on after iDesktop closes. Your on/off choice is kept for next time.
 - Root cause of WebDriverAgent connections stalling after a client disconnects: the tunnel's TCP stack reused the same source port for every connection to the phone, so a new connection collided with the one iOS was still closing. Each connection now gets a random port.
 - New connections to the phone through the no-admin tunnel (WebDriverAgent requests, for one) no longer hang forever when the phone stops answering new connections: each gets 6 s, one retry, then a quick error. Timeouts are logged.
 - Passcode keypad opens far less often: once when Automation starts and iOS asks, or when you click the mirror of a locked phone - no longer on every lock or whenever WebDriverAgent is slow. Its keys ignore clicks for half a second after it appears.

@@ -107,6 +107,23 @@ class _Automation:
             cls.run_task.cancel()   # ends the XCUITest session -> iOS removes the overlay
 
     @classmethod
+    async def stop_then_exit(cls, code: int) -> None:
+        """End the WDA runner properly, then exit. A plain process exit leaves the runner going on
+        the phone (and "Automation Running" on screen): iOS never hears the session end. The
+        saved on/off choice is kept, so Automation comes back on the next start."""
+        import asyncio
+        import os
+        task = cls.run_task
+        if task is not None and not task.done():
+            log.info("stopping WebDriverAgent before exiting")
+            task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(asyncio.gather(task, return_exceptions=True)), 4)
+            except Exception:
+                pass
+        os._exit(code)
+
+    @classmethod
     def state(cls) -> dict:
         return {"available": cls.available, "wanted": cls.wanted, "running": cls.running}
 
@@ -202,10 +219,15 @@ async def _control_server(port: int) -> None:
                 _Automation.set(bool(json.loads(body or b"{}").get("on")))
             if route == "/disconnect" and method == "POST":
                 # End the stream (and WDA) but keep the window: the launcher waits for /reconnect.
-                import os
                 log.info("disconnect requested from the viewer")
-                threading.Timer(0.3, lambda: os._exit(DISCONNECT_EXIT)).start()
-            code = "200 OK" if route in ("/automation", "/status", "/disconnect") else "404 Not Found"
+                asyncio.get_running_loop().call_later(
+                    0.3, lambda: asyncio.ensure_future(_Automation.stop_then_exit(DISCONNECT_EXIT)))
+            if route == "/shutdown" and method == "POST":
+                # The launcher is quitting (window closed): stop Automation on the phone first.
+                log.info("shutdown requested by the launcher")
+                asyncio.get_running_loop().call_later(
+                    0.1, lambda: asyncio.ensure_future(_Automation.stop_then_exit(0)))
+            code = "200 OK" if route in ("/automation", "/status", "/disconnect", "/shutdown") else "404 Not Found"
             if route == "/status":
                 # iOS refuses to (re)start the stream during calls; upstream keeps retrying.
                 now = time.time()

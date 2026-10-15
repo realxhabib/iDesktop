@@ -116,7 +116,7 @@ Click the round **⋯** button next to the phone (or press Ctrl+M) for these but
 | **Refresh** | Reloads the viewer and reconnects the picture, if it ever looks frozen while taps still work (same as F5). iDesktop also does this by itself after reconnecting. |
 | **Classic window** | Switches to a normal window with a toolbar, accessibility settings, a clipboard panel and Big Screen. |
 | **Disconnect** | Stops mirroring and releases the phone (its "Automation Running" notice goes away too), but keeps the floating phone on your desktop with a **Reconnect** button. |
-| **Minimize / Quit** | Minimizes or closes iDesktop. |
+| **Minimize / Quit** | Minimizes or closes iDesktop. Quitting also ends Automation on the phone, so its "Automation Running" notice goes away; it starts again next time if you left it on. |
 
 ### Automation
 

@@ -241,6 +241,17 @@ def run_native(udid: str, transport: list[str], wda_bundle: str | None, wifi_hos
                 time.sleep(4)
         return True
     finally:
+        # Quitting: let the stream end Automation on the phone first (a killed process leaves the
+        # WDA runner and its "Automation Running" notice going), then stop everything.
+        live = [p for p in procs if p.poll() is None]
+        if live:
+            try:
+                import urllib.request
+                urllib.request.urlopen(urllib.request.Request(
+                    f"http://127.0.0.1:{ext_port + 10}/shutdown", data=b"{}", method="POST"), timeout=2).close()
+                procs[-1].wait(timeout=6)
+            except Exception:
+                pass
         for p in procs:
             try:
                 p.terminate()

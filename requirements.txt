@@ -1,4 +1,6 @@
-pymobiledevice3==11.26.0
+# Pin the requested dependency versions for reproducible installs.
+pymobiledevice3==11.49.2
+srptools==2.0.0
 av>=14
 pillow==12.3.0
 requests==2.34.2

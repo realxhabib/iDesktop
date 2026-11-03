@@ -1068,7 +1068,18 @@ BODY_INJECT = """
         const b = layoutNext; layoutNext = null;
         let ok = false;
         try { const r = await fetch(EXT + '/window/layout', {method: 'POST', body: b});
-              ok = r.ok; if (!ok) report('window layout: ' + await r.text()); } catch (e) {}
+              ok = r.ok; if (!ok) report('window layout: ' + await r.text());
+              else {
+                const state = await r.json();
+                if (state.moved) {
+                  if (JSON.parse(b).drag?.[0] !== dragSession) continue;
+                  // Discard layouts in the old monitor's coordinates and wait for the new viewport.
+                  layoutNext = null; layoutSent = ''; dragLanding = {...state, at: performance.now()};
+                  if (dragId === null) dragSavePending = true;
+                  requestAnimationFrame(() => window.fitCanvasToViewport());
+                  continue;
+                }
+              } } catch (e) {}
         if (ok) layoutSent = b;
         else setTimeout(() => { if (layoutWanted === b && layoutSent !== b) postLayout(JSON.parse(b)); }, 1500);  // helper (re)starting
       }
@@ -1112,6 +1123,25 @@ BODY_INJECT = """
     sw = Math.round(sw); sh = Math.round(sh);
     const pw = sw + 2 * E, ph = sh + 2 * E, sr = Math.round(Math.min(sw, sh) * 0.13), R = sr + E;
     const PAD = 4, FAB = 42, PH = 32, PW = 196, CXR = pw + PAD + 14;   // controls column, relative
+    if (dragLanding) {
+      // Native coordinates are physical pixels. Wait for Edge's resize/DPI update before using them.
+      const [cw, ch] = dragLanding.content;
+      if ((Math.abs(cw / dpr - innerWidth) > 3 || Math.abs(ch / dpr - innerHeight) > 3) &&
+          performance.now() - dragLanding.at < 750) {
+        requestAnimationFrame(() => window.fitCanvasToViewport());
+        return true;
+      }
+      // Pointer samples use physical client pixels, so a later DPI update doesn't discard them.
+      // A sample taken during this landing belongs to the destination even if screenX changes
+      // with DPI. Otherwise check the window origin to reject samples from the source monitor.
+      const p = dragPointer;
+      const current = p && (p.landing === dragLanding ||
+                            (p.sx === window.screenX && p.sy === window.screenY));
+      dLX = (current ? p.x : dragLanding.cursor[0]) / dpr;
+      dLY = (current ? p.y : dragLanding.cursor[1]) / dpr;
+      posX = dLX - PAD - dragAnchor[0] * pw; posY = dLY - dragAnchor[1] * ph;
+      dragLanding = null;
+    }
     if (full) {
       const maxX = innerWidth - (PAD + CXR + FAB + 4), maxY = innerHeight - ph - 2 - below;
       posX = Math.max(0, Math.min(posX, maxX)); posY = Math.max(0, Math.min(posY, maxY));
@@ -1175,7 +1205,12 @@ BODY_INJECT = """
     try { window.__extPlaceOverlays?.(); } catch (e) {}   // overlays follow the phone (drag)
     // Big Screen: the whole (maximized) window is shown, black around the phone.
     if (bigFloat) shapes.splice(0, shapes.length, {x: 0, y: 0, w: innerWidth, h: innerHeight, r: 0});
-    postLayout({dpr, maximize: true, shapes});
+    // A changing drag token reaches the helper even while the phone is clamped at a screen edge.
+    postLayout({dpr, maximize: true, shapes,
+                drag: dragId !== null && !bigFloat ? [dragSession, dragTick] : undefined});
+    if (dragSavePending) {
+      store('ext-pos', Math.round(posX) + ',' + Math.round(posY)); dragSavePending = false;
+    }
     return true;
   }
   // Back from the background/minimized: re-send the shape so the helper re-clips and repaints the
@@ -1189,18 +1224,38 @@ BODY_INJECT = """
   let posX = 40, posY = 8;
   { const sp = (stored('ext-pos') || '').split(',').map(Number); if (sp.length === 2 && sp.every(isFinite)) [posX, posY] = sp; }
   let dragId = null, dLX = 0, dLY = 0, dragRaf = 0;
+  let dragSession = 0, dragTick = 0, dragAnchor = [0, 0], dragLanding = null, dragSavePending = false;
+  let dragPointer = null;
+  const rememberDragPointer = (e) => {
+    const dpr = window.devicePixelRatio || 1;
+    dragPointer = {x: e.clientX * dpr, y: e.clientY * dpr,
+                   sx: window.screenX, sy: window.screenY, landing: dragLanding};
+  };
   const isRim = (t) => t === extPhone || t === extBezel || t === camCtl;
   extPhone.addEventListener('pointerdown', (e) => {
     if (!isRim(e.target) || e.button !== 0 || bigFloat) return;
+    // Preserve the grabbed point as a fraction of the phone when crossing different-DPI displays.
+    const r = extPhone.getBoundingClientRect();
+    dragAnchor = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+    dragSession++; dragTick = 0;
+    rememberDragPointer(e);
     dragId = e.pointerId; extPhone.setPointerCapture(dragId); dLX = e.clientX; dLY = e.clientY; e.preventDefault();
   });
   extPhone.addEventListener('pointermove', (e) => {
     if (e.pointerId !== dragId) return;
-    posX += e.clientX - dLX; posY += e.clientY - dLY; dLX = e.clientX; dLY = e.clientY;
+    rememberDragPointer(e);
+    dragTick++;
+    if (!dragLanding) {
+      posX += e.clientX - dLX; posY += e.clientY - dLY; dLX = e.clientX; dLY = e.clientY;
+    }
     if (!dragRaf) dragRaf = requestAnimationFrame(() => { dragRaf = 0; window.fitCanvasToViewport(); });
   });
-  const endDrag = (e) => { if (e.pointerId !== dragId) return; dragId = null;
-                           store('ext-pos', Math.round(posX) + ',' + Math.round(posY)); };
+  const endDrag = (e) => { if (e.pointerId !== dragId) return;
+    if (e.type === 'pointerup') rememberDragPointer(e);
+    dragId = null;
+    // Save after the final layout/monitor response, not the source monitor's stale coordinates.
+    dragSavePending = true; layoutSent = ''; window.fitCanvasToViewport();
+  };
   extPhone.addEventListener('pointerup', endDrag); extPhone.addEventListener('pointercancel', endDrag);
   extPhone.addEventListener('contextmenu', (e) => { if (!isRim(e.target)) return; e.preventDefault(); setMenu(!menuOpen); });
   window.addEventListener('keydown', (e) => {

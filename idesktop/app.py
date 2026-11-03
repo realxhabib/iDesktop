@@ -105,6 +105,7 @@ def find_browser() -> str | None:
 
 
 def open_app_window(url: str) -> subprocess.Popen | None:
+    """Use default bounds on the first run; otherwise let the browser restore its saved placement."""
     exe = find_browser()
     if not exe:
         os.startfile(url)
@@ -123,9 +124,13 @@ def open_app_window(url: str) -> subprocess.Popen | None:
     w = int(h * 0.52)
     # A dedicated profile means this process owns the window: it exits when the window closes.
     extra = []
+    # Only specify size and position before the browser has created its dedicated profile.
+    if not profile.is_dir():
+        extra.append(f"--window-size={w},{h}")
+        extra.append(f"--window-position=20,{top}")
     if os.environ.get("IDESKTOP_DEVTOOLS"):  # debugging only: tools/cdp.py talks to this port
         extra.append(f"--remote-debugging-port={os.environ['IDESKTOP_DEVTOOLS']}")
-    return subprocess.Popen([exe, f"--app={url}", f"--window-size={w},{h}", f"--window-position=20,{top}",
+    return subprocess.Popen([exe, f"--app={url}",
                              f"--user-data-dir={profile}",
                              "--no-first-run", "--no-default-browser-check",
                              "--autoplay-policy=no-user-gesture-required",
@@ -185,7 +190,8 @@ def run_native(udid: str, transport: list[str], wda_bundle: str | None, wifi_hos
                                       creationflags=device.CREATE_NO_WINDOW))
         stream = start_stream(transport, wifi_host)
         procs.append(stream)
-        url = f"http://127.0.0.1:{port}/"
+        # Use an undotted loopback hostname to work around the observed app-window placement issue.
+        url = f"http://localhost:{port}/"
         log("Starting the screen stream...")
         for _ in range(60):
             if stream.poll() is not None:

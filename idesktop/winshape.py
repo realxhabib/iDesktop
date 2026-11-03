@@ -16,6 +16,12 @@ from ctypes import wintypes
 
 TITLE = "iDesktop"
 
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+
 if os.name == "nt":
     user32 = ctypes.windll.user32
     gdi32 = ctypes.windll.gdi32
@@ -33,6 +39,14 @@ if os.name == "nt":
     user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     user32.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HANDLE]
     user32.RedrawWindow.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.HANDLE, wintypes.UINT]
+    user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+    user32.MonitorFromPoint.restype = wintypes.HANDLE
+    user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+    user32.MonitorFromWindow.restype = wintypes.HANDLE
+    user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                                  ctypes.c_int, ctypes.c_int, wintypes.UINT]
 
 SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x2, 0x1, 0x4, 0x10
 RGN_OR = 2
@@ -131,11 +145,41 @@ def _watchdog() -> None:
 
 def apply_layout(spec: dict) -> dict:
     global _last_spec, _watch
-    _last_spec = None if spec.get("off") else spec
+    # Drag requests are transient: the watchdog must never move a window after the drag ends.
+    _last_spec = None if spec.get("off") else {k: v for k, v in spec.items() if k != "drag"}
     if _watch is None and _last_spec:
         _watch = threading.Thread(target=_watchdog, daemon=True)
         _watch.start()
     return _apply(spec)
+
+
+def _follow_drag(hwnd) -> dict | None:
+    """Move the maximized host to the cursor's monitor; return physical-pixel landing geometry."""
+    # Ignore delayed requests after release, and do not jump across gaps between displays.
+    if not user32.GetAsyncKeyState(0x01) & 0x8000:  # VK_LBUTTON
+        return None
+    cursor = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(cursor)):
+        return None
+    target = user32.MonitorFromPoint(cursor, 0)  # MONITOR_DEFAULTTONULL
+    if not target or target == user32.MonitorFromWindow(hwnd, 2):  # MONITOR_DEFAULTTONEAREST
+        return None
+    info = _MONITORINFO()
+    info.cbSize = ctypes.sizeof(info)
+    if not user32.GetMonitorInfoW(target, ctypes.byref(info)):
+        return None
+    work = info.rcWork
+    # Keep the original single-monitor, maximized-and-clipped design on the destination display.
+    user32.ShowWindow(hwnd, SW_RESTORE)
+    if not user32.SetWindowPos(hwnd, None, work.left, work.top,
+                              work.right - work.left, work.bottom - work.top,
+                              SWP_NOZORDER | SWP_NOACTIVATE):
+        raise ctypes.WinError()
+    user32.ShowWindow(hwnd, SW_MAXIMIZE)
+    content = _content_rect(hwnd)
+    return {"ok": True, "moved": True,
+            "cursor": [cursor.x - content.left, cursor.y - content.top],
+            "content": [content.right - content.left, content.bottom - content.top]}
 
 
 def _apply(spec: dict) -> dict:
@@ -145,6 +189,11 @@ def _apply(spec: dict) -> dict:
         hwnd = find_window()
         if not hwnd:
             raise RuntimeError("viewer window not found")
+        if spec.get("maximize") and spec.get("drag"):
+            moved = _follow_drag(hwnd)
+            if moved:
+                # The page must recalculate CSS bounds after the monitor/DPI change before clipping.
+                return moved
         if spec.get("off"):
             _set_backdrop(hwnd, 2)
             user32.SetWindowRgn(hwnd, None, True)

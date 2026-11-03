@@ -12,7 +12,9 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "pymobiledevice3==11.26.0",
+    # Match the requested dependency versions in requirements.txt.
+    "pymobiledevice3==11.49.2",
+    "srptools==2.0.0",
     "av>=14",
     "pillow>=10",
     "requests>=2.31",
